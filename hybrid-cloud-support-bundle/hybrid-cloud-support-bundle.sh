@@ -83,7 +83,7 @@ echo "=> Start network overlay test" > "$output_dir/overlaytest/overlaytest.log"
 echo "=> End network overlay test" >> "$output_dir/overlaytest/overlaytest.log"
 
 kubectl delete daemonset overlaytest -n $namespace
-exit 1
+
 # Get all Qdrant related resources in the namespace into indivdual files
 crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
 
