@@ -55,7 +55,7 @@ spec:
       tolerations:
       - operator: Exists
       containers:
-      - image: registry.cloud.qdrant.io/library/qdrant-debug
+      - image: registry.suse.com/bci/bci-busybox
         imagePullPolicy: Always
         name: overlaytest
         command: ["sh", "-c", "tail -f /dev/null"]
