@@ -37,6 +37,53 @@ fi
 output_dir="hybrid-cloud-support-bundle-$(date +%Y%m%d%H%M%S)"
 mkdir -p "$output_dir"
 
+# Testing connectivity
+kubectl -n $namespace apply -f - <<EOF
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: overlaytest
+spec:
+  selector:
+      matchLabels:
+        name: overlaytest
+  template:
+    metadata:
+      labels:
+        name: overlaytest
+    spec:
+      tolerations:
+      - operator: Exists
+      containers:
+      - image: rancherlabs/swiss-army-knife
+        imagePullPolicy: Always
+        name: overlaytest
+        command: ["sh", "-c", "tail -f /dev/null"]
+        terminationMessagePath: /dev/termination-log
+      terminationGracePeriodSeconds: 1
+EOF
+
+kubectl rollout status daemonset overlaytest -n $namespace
+
+mkdir -p "$output_dir/overlaytest"
+
+echo "=> Start network overlay test" > "$output_dir/overlaytest/overlaytest.log"
+  kubectl get pods -l name=overlaytest -o jsonpath='{range .items[*]}{@.metadata.name}{" "}{@.spec.nodeName}{"\n"}{end}' |
+  while read spod shost
+    do kubectl get pods -l name=overlaytest -o jsonpath='{range .items[*]}{@.status.podIP}{" "}{@.spec.nodeName}{"\n"}{end}' |
+    while read tip thost
+      do kubectl --request-timeout='10s' exec $spod -c overlaytest -- /bin/sh -c "ping -c2 $tip > /dev/null 2>&1"
+        RC=$?
+        if [ $RC -ne 0 ]
+          then echo FAIL: $spod on $shost cannot reach pod IP $tip on $thost >> "$output_dir/overlaytest/overlaytest.log"
+          else echo $shost can reach $thost >> "$output_dir/overlaytest/overlaytest.log"
+        fi
+    done
+  done
+echo "=> End network overlay test" >> "$output_dir/overlaytest/overlaytest.log"
+
+kubectl delete daemonset overlaytest -n $namespace
+
 # Get all Qdrant related resources in the namespace into indivdual files
 crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
 
