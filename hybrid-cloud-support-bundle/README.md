@@ -59,5 +59,6 @@ chmod +x hybrid-cloud-support-bundle.sh
   * Collection list endpoint
   * Collection configuration endpoint
   * Collection cluster information endpoint
+* Network Connectivity between pods in the Qdrant namespace
 
 The support bundle does not contain any user data stored int the Qdrant database, on volumes or snapshots, or sensitive information like API keys or certificates.
