@@ -82,35 +82,45 @@ echo "=> Start network overlay test" > "$output_dir/overlaytest/overlaytest.log"
   done
 echo "=> End network overlay test" >> "$output_dir/overlaytest/overlaytest.log"
 
-kubectl delete daemonset overlaytest -n $namespace
+kubectl delete daemonset overlaytest -n $namespace --wait
 
 # Get all Qdrant related resources in the namespace into indivdual files
 crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
 
 for crd in "${crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
-    kubectl -n "$namespace" get "$crd" -o name | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace get {} -o yaml > $output_dir/resources/{}.yaml || true"
-    echo -n '.'
-    kubectl -n "$namespace" get "$crd" -o name | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace describe {} > $output_dir/resources/{}.txt || true"
-    echo -n '.'
+    names=$(kubectl -n "$namespace" get "$crd" -o name)
+    for name in $names; do
+        kubectl -n $namespace get $name -o yaml > $output_dir/resources/$name.yaml || true
+        echo -n '.'
+        kubectl -n $namespace describe $name > $output_dir/resources/$name.txt || true
+        echo -n '.'
+    done
 done
 
-# Get logs of all pods in the namespace
-mkdir -p "$output_dir/logs"
-kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace logs {} --all-containers > $output_dir/logs/{}.log"
-echo -n '.'
-kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace logs {} --all-containers --previous > $output_dir/logs/{}.previous.log || true"
-echo -n '.'
+pods=$(kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2)
 
-# Get resource usage of all pods in the namespace
+mkdir -p "$output_dir/logs"
 mkdir -p "$output_dir/pod-resource-usage"
-kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace top pod {} > $output_dir/pod-resource-usage/{}.txt || true"
-echo -n '.'
+
+for pod in $pods; do
+    # Get logs of all pods in the namespace
+    kubectl -n $namespace logs $pod --all-containers > $output_dir/logs/$pod.log
+    echo -n '.'
+    kubectl -n $namespace logs $pod --all-containers --previous > $output_dir/logs/$pod.previous.log || true
+    echo -n '.'
+
+    # Get resource usage of all pods in the namespace
+    kubectl -n $namespace top pod $pod > $output_dir/pod-resource-usage/$pod.txt || true
+done
 
 # Get resource usage of all nodes
 mkdir -p "$output_dir/node-resource-usage"
-kubectl get nodes -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl top node {} > $output_dir/node-resource-usage/{}.txt || true"
-echo -n '.'
+nodes=$(kubectl get nodes -o name | cut -d '/' -f 2)
+for node in $nodes; do
+    kubectl top node $node > "$output_dir/node-resource-usage/$node.txt" || true
+    echo -n '.'
+done
 
 # Get telemetry of Qdrant Pods
 mkdir -p "$output_dir/qdrant-telemetry"
