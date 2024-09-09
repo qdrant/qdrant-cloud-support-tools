@@ -11,6 +11,8 @@ The following tools are required to use this script:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [jq](https://jqlang.github.io/jq/download/)
 
+If you're unable to install the required dependencies, please use the `no-deps.sh` script as an alternative.
+
 `kubectl` must be configured to access the Kubernetes cluster of your Qdrant Hybrid Cloud environment.
 
 ## Usage
