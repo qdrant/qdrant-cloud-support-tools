@@ -48,6 +48,8 @@ done
 mkdir -p "$output_dir/logs"
 kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace logs {} --all-containers > $output_dir/logs/{}.log"
 echo -n '.'
+
+# Try to get previous logs, but don't error out if not found
 kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace logs {} --all-containers --previous > $output_dir/logs/{}.previous.log || true"
 echo -n '.'
 
