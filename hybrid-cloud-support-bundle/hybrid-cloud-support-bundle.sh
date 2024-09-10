@@ -10,10 +10,6 @@ if ! command -v kubectl &> /dev/null; then
     echo "kubectl is not installed. Please install kubectl and try again."
     exit 1
 fi
-if ! command -v jq &> /dev/null; then
-    echo "jq is not installed. Please install jq and try again."
-    exit 1
-fi
 
 # Check if kubectl can access the Kubernetes cluster
 if ! kubectl version &> /dev/null; then
@@ -182,18 +178,18 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
     echo -n '.'
-    collections=$(curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
+    collections=$(curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | grep "\"name\"" | sed -e "s/.*\[//" -e "s/\].*//" -e "s/{\"name\":\"//" -e "s/\"}$//" -e "s/\"},{\"name\":\"/\n/g")
     echo -n '.'
     for collection in $collections; do
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
+        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
+        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
         echo -n '.'
     done
 
