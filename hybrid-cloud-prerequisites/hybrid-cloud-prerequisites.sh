@@ -130,3 +130,7 @@ else
     echo ""
     echo "No volume snapshot classes are available. You will not be able to create snapshots of your Qdrant Clusters."
 fi
+
+echo ""
+echo "Your Kubernetes version is"
+kubectl version
