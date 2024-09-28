@@ -132,5 +132,11 @@ else
 fi
 
 echo ""
+
+# check if connection to cloud.qdrant.io can be established from within a Pod in the Kubernetes cluster
+echo "Checking connectivity to cloud.qdrant.io from within a Pod in the Kubernetes cluster..."
+kubectl run -i --tty --rm qdrant-connection-test --image=registry.suse.com/bci/bci-base:15.6 --restart=Never -- curl https://cloud.qdrant.io/settings.json
+
+echo ""
 echo "Your Kubernetes version is"
 kubectl version
