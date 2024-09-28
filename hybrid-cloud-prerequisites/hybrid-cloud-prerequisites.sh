@@ -100,7 +100,8 @@ EOF
     elif kubectl exec -it $POD_NAME -- df -TP /volume | grep -q "btrfs"; then
         echo "Storage class $STORAGE_CLASS_NAME provides block storage with a btrfs fileystem."
     else
-        echo "Storage class $STORAGE_CLASS_NAME does provide a filesystem which may not be supported."
+        echo "Storage class $STORAGE_CLASS_NAME does provide a potentially unsupported filesystem:"
+        kubectl exec -it $POD_NAME -- df -TP /volume
     fi
 
     # Clean up the resources
@@ -111,7 +112,7 @@ done
 echo ""
 
 # get storage classes that allow volume expansion
-expandable_storage_classes=$(kubectl get storageclass -o jsonpath='{.items[?(@.allowVolumeExpansion=="true")].metadata.name}')
+expandable_storage_classes=$(kubectl get storageclass -o jsonpath='{.items[?(@.allowVolumeExpansion==true)].metadata.name}')
 
 if [ -z "$expandable_storage_classes" ]; then
     echo "None of your storage classes allow volume expansion. You will not be able to vertically scale your Qdrant Clusters."
