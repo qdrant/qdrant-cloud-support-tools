@@ -21,7 +21,7 @@ fi
 namespace="$1"
 if [ -z "$namespace" ]; then
     read -p "Enter the Kubernetes namespace of Qdrant Hybrid cloud: " namespace
-fi
+fi;
 
 # Check if the namespace exists
 if ! kubectl get namespace "$namespace" &> /dev/null; then
@@ -31,54 +31,147 @@ fi
 
 # Ensure output directory exists
 output_dir="hybrid-cloud-support-bundle-$(date +%Y%m%d%H%M%S)"
+output_log="$output_dir/output.log"
 mkdir -p "$output_dir"
 
-# Get all Qdrant related resources in the namespace into individual files
+exec 5> "$output_dir/trace.log"
+BASH_XTRACEFD="5"
+PS4='$LINENO: '
+set -x
+
+echo "Creating Hybrid Cloud support bundle for namespace ${namespace}"
+
+echo "Testing network connectivity between Kubernetes nodes"
+
+# Testing connectivity
+kubectl -n $namespace apply -f - &>> "${output_log}" <<EOF
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: overlaytest
+spec:
+  selector:
+      matchLabels:
+        name: overlaytest
+  template:
+    metadata:
+      labels:
+        name: overlaytest
+    spec:
+      tolerations:
+      - operator: Exists
+      containers:
+      - image: registry.suse.com/bci/bci-busybox
+        imagePullPolicy: Always
+        name: overlaytest
+        command: ["sh", "-c", "tail -f /dev/null"]
+        terminationMessagePath: /dev/termination-log
+      terminationGracePeriodSeconds: 1
+EOF
+
+kubectl rollout status daemonset overlaytest -n $namespace &>> "${output_log}"
+
+mkdir -p "$output_dir/overlaytest"
+
+echo "=> Start network overlay test" > "$output_dir/overlaytest/overlaytest.log"
+  kubectl get pods -l name=overlaytest -o jsonpath='{range .items[*]}{@.metadata.name}{" "}{@.spec.nodeName}{"\n"}{end}' 2>> "${output_log}" |
+  while read spod shost
+    do kubectl get pods -l name=overlaytest -o jsonpath='{range .items[*]}{@.status.podIP}{" "}{@.spec.nodeName}{"\n"}{end}' 2>> "${output_log}" |
+    while read tip thost
+      do kubectl --request-timeout='10s' exec $spod -c overlaytest -- /bin/sh -c "ping -c2 $tip > /dev/null 2>&1"
+        RC=$?
+        if [ $RC -ne 0 ]
+          then echo FAIL: $spod on $shost cannot reach pod IP $tip on $thost >> "$output_dir/overlaytest/overlaytest.log"
+          else echo $shost can reach $thost >> "$output_dir/overlaytest/overlaytest.log"
+        fi
+    done
+  done
+echo "=> End network overlay test" >> "$output_dir/overlaytest/overlaytest.log"
+
+kubectl delete daemonset overlaytest -n "$namespace" --wait &>> "${output_log}"
+
+sleep 3
+
+echo ""
+echo "Getting Kubernetes resources"
+
+# Get all Qdrant related resources in the namespace into indivdual files
 crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
 
 for crd in "${crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
-    kubectl -n "$namespace" get "$crd" -o name | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace get {} -o yaml > $output_dir/resources/{}.yaml || true"
+    kubectl -n "$namespace" get "$crd" -o wide 2>> "${output_log}" > "$output_dir/resources/list_$crd.yaml" || true
     echo -n '.'
-    kubectl -n "$namespace" get "$crd" -o name | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace describe {} > $output_dir/resources/{}.txt || true"
-    echo -n '.'
+    # if crd exists
+    if kubectl get "$crd" &> /dev/null; then
+        names=$(kubectl -n "$namespace" get "$crd" -o name)
+        for name in $names; do
+            kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
+            echo -n '.'
+            kubectl -n "$namespace" describe "$name" 2>> "${output_log}" > "$output_dir/resources/$name.txt" || true
+            echo -n '.'
+        done
+    fi
 done
 
-# Get logs of all pods in the namespace
+pods=$(kubectl -n "$namespace" get pods -o name 2>> "${output_log}" | cut -d '/' -f 2)
+
 mkdir -p "$output_dir/logs"
-kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace logs {} --all-containers > $output_dir/logs/{}.log"
-echo -n '.'
-
-# Try to get previous logs, but don't error out if not found
-kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace logs {} --all-containers --previous > $output_dir/logs/{}.previous.log || true"
-echo -n '.'
-
-# Get resource usage of all pods in the namespace
 mkdir -p "$output_dir/pod-resource-usage"
-kubectl -n "$namespace" get pods -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl -n $namespace top pod {} > $output_dir/pod-resource-usage/{}.txt || true"
-echo -n '.'
+
+echo ""
+echo "Getting logs of containers"
+
+for pod in $pods; do
+    # Get logs of all pods in the namespace
+    kubectl -n "$namespace" logs "$pod" --all-containers 2>> "${output_log}" > "$output_dir/logs/$pod.log"
+    echo -n '.'
+    kubectl -n "$namespace" logs "$pod" --all-containers --previous 2>> "${output_log}" > "$output_dir/logs/$pod.previous.log" || true
+    echo -n '.'
+
+    # Get resource usage of all pods in the namespace
+    kubectl -n "$namespace" top pod "$pod" > "$output_dir/pod-resource-usage/$pod.txt" 2>> "${output_log}" || true
+done
+
+echo ""
+echo "Getting resource usage"
 
 # Get resource usage of all nodes
 mkdir -p "$output_dir/node-resource-usage"
-kubectl get nodes -o name | cut -d '/' -f 2 | tr '\n' '\0' | xargs -S1024 -0 -n1 -I {} sh -c "kubectl top node {} > $output_dir/node-resource-usage/{}.txt || true"
-echo -n '.'
+nodes=$(kubectl get nodes -o name 2>> "${output_log}" | cut -d '/' -f 2)
+for node in $nodes; do
+    kubectl top node "$node" 2>> "${output_log}" > "$output_dir/node-resource-usage/$node.txt" || true
+    echo -n '.'
+done
+
+echo ""
+echo "Getting Qdrant telemetry"
 
 # Get telemetry of Qdrant Pods
 mkdir -p "$output_dir/qdrant-telemetry"
-for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name); do
+for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${output_log}"); do
     pod_name=$(echo $pod | cut -d '/' -f 2)
-    cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}')
+
+    pod_status=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>> "${output_log}")
+    if [ "$pod_status" != "Running" ]; then
+        echo ""
+        echo "Skipping $pod_name as it is not running"
+        echo ""
+        continue
+    fi
+
+    cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
     cluster_name="qdrant-$cluster_id"
 
     # get secret reference from pod environment variable
-    api_key_secret_name=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.spec.containers[0].env[?(@.name=="QDRANT__SERVICE__API_KEY")].valueFrom.secretKeyRef.name}')
+    api_key_secret_name=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.spec.containers[0].env[?(@.name=="QDRANT__SERVICE__API_KEY")].valueFrom.secretKeyRef.name}' 2>> "${output_log}")
     echo -n '.'
-    api_key_secret_key=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.spec.containers[0].env[?(@.name=="QDRANT__SERVICE__API_KEY")].valueFrom.secretKeyRef.key}')
+    api_key_secret_key=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.spec.containers[0].env[?(@.name=="QDRANT__SERVICE__API_KEY")].valueFrom.secretKeyRef.key}' 2>> "${output_log}")
     echo -n '.'
     # get api key
-    api_key=$(kubectl -n "$namespace" get secret "$api_key_secret_name" -o jsonpath="{.data.$api_key_secret_key}" | base64 -d)
+    api_key=$(kubectl -n "$namespace" get secret "$api_key_secret_name" -o jsonpath="{.data.$api_key_secret_key}" 2>> "${output_log}" | base64 -d)
     echo -n '.'
-    tls_active=$(kubectl -n "$namespace" get configmap "$cluster_name" -o jsonpath='{.data.production\.yaml}')
+    tls_active=$(kubectl -n "$namespace" get configmap "$cluster_name" -o jsonpath='{.data.production\.yaml}' 2>> "${output_log}")
     echo -n '.'
 
     args=()
@@ -90,7 +183,7 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name); do
     fi
 
     # port-forward
-    kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
+    kubectl -n "$namespace" port-forward "$pod" 6333:6333 &>> "${output_log}" &
     sleep 3
     pid=$!
 
@@ -99,26 +192,30 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name); do
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl "${args[@]}" "$protocol://localhost:6333/telemetry" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
-    curl "${args[@]}" "$protocol://localhost:6333/collections" > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     echo -n '.'
-    curl "${args[@]}" "$protocol://localhost:6333/cluster" > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
     echo -n '.'
-    collections=$(curl "${args[@]}" "$protocol://localhost:6333/collections" | grep -oP '"name": "\K[^"]+')
-    echo -n '.'
-    for collection in $collections; do
-        curl "${args[@]}" "$protocol://localhost:6333/collections/$collection" > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
-        echo -n '.'
-        curl "${args[@]}" "$protocol://localhost:6333/collections/$collection/cluster" > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
-        echo -n '.'
-    done
 
-    kill $pid
+    set +x
+    if [ -n "$api_key" ]; then
+        sed -i "s/${api_key}/*****/g" "$output_dir/output.log"
+        sed -i "s/${api_key}/*****/g" "$output_dir/trace.log"
+    fi
+    set -x
+
+    kill $pid 2>> "${output_log}"
 done
 
+echo ""
+echo "Getting Kubernetes version"
 # Get kubernetes version
-kubectl version > "$output_dir/kubernetes-version.txt"
+kubectl version &>> "${output_log}" > "$output_dir/kubernetes-version.txt"
+
+echo ""
+echo "Creating archive"
 
 # Create a tarball of the output directory
 tar -czf "$output_dir.tar.gz" "$output_dir"

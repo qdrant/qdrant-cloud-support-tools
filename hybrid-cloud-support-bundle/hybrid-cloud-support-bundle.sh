@@ -104,13 +104,18 @@ crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantcluster
 
 for crd in "${crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
-    names=$(kubectl -n "$namespace" get "$crd" -o name)
-    for name in $names; do
-        kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
-        echo -n '.'
-        kubectl -n "$namespace" describe "$name" 2>> "${output_log}" > "$output_dir/resources/$name.txt" || true
-        echo -n '.'
-    done
+    kubectl -n "$namespace" get "$crd" -o wide 2>> "${output_log}" > "$output_dir/resources/list_$crd.yaml" || true
+    echo -n '.'
+    # if crd exists
+    if kubectl get "$crd" &> /dev/null; then
+        names=$(kubectl -n "$namespace" get "$crd" -o name)
+        for name in $names; do
+            kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
+            echo -n '.'
+            kubectl -n "$namespace" describe "$name" 2>> "${output_log}" > "$output_dir/resources/$name.txt" || true
+            echo -n '.'
+        done
+    fi
 done
 
 pods=$(kubectl -n "$namespace" get pods -o name 2>> "${output_log}" | cut -d '/' -f 2)
@@ -150,6 +155,15 @@ echo "Getting Qdrant telemetry"
 mkdir -p "$output_dir/qdrant-telemetry"
 for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${output_log}"); do
     pod_name=$(echo $pod | cut -d '/' -f 2)
+
+    pod_status=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>> "${output_log}")
+    if [ "$pod_status" != "Running" ]; then
+        echo ""
+        echo "Skipping $pod_name as it is not running"
+        echo ""
+        continue
+    fi
+
     cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
     cluster_name="qdrant-$cluster_id"
 
@@ -207,10 +221,13 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     kill $pid 2>> "${output_log}"
 done
 
+echo ""
+echo "Getting Kubernetes version"
 # Get kubernetes version
 kubectl version &>> "${output_log}" > "$output_dir/kubernetes-version.txt"
 
-
+echo ""
+echo "Creating archive"
 
 # Create a tarball of the output directory
 tar -czf "$output_dir.tar.gz" "$output_dir"
