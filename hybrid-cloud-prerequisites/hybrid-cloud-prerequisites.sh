@@ -94,13 +94,13 @@ EOF
     # Verify if the volume is a block device inside the pod
     echo "Checking if the volume is a block device..."
     if kubectl exec -it $POD_NAME -- df -TP /volume | grep -q "ext4"; then
-        echo "Storage class $STORAGE_CLASS_NAME provides block storage with an ext4 fileystem."
+        echo "Storage class $storage_class provides block storage with an ext4 fileystem."
     elif kubectl exec -it $POD_NAME -- df -TP /volume | grep -q "xfs"; then
-        echo "Storage class $STORAGE_CLASS_NAME provides block storage with an xfs fileystem."
+        echo "Storage class $storage_class provides block storage with an xfs fileystem."
     elif kubectl exec -it $POD_NAME -- df -TP /volume | grep -q "btrfs"; then
-        echo "Storage class $STORAGE_CLASS_NAME provides block storage with a btrfs fileystem."
+        echo "Storage class $storage_class provides block storage with a btrfs fileystem."
     else
-        echo "Storage class $STORAGE_CLASS_NAME does provide a potentially unsupported filesystem:"
+        echo "Storage class $storage_class does provide a potentially unsupported filesystem:"
         kubectl exec -it $POD_NAME -- df -TP /volume
     fi
 
