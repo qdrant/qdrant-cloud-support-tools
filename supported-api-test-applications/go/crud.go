@@ -11,9 +11,9 @@ import (
 func main() {
 	// Create a new client to connect to the Qdrant Managed Cloud
 	client, err := qdrant.NewClient(&qdrant.Config{
-		Host:   "9ed46f5d-49d2-4339-89c1-08e2b4c79cf7.us-east4-0.gcp.cloud.qdrant.io", // Replace with your Qdrant instance host
+		Host:   ".us-east4-0.gcp.cloud.qdrant.io", // Replace with your Qdrant instance host
 		Port:   6334,
-		APIKey: "dUAFamvvSCP1AcuGdRaq5o8ujE7vBd496_Be24iF2Q-EtRWe1Pv7IQ", // Replace with your API key
+		APIKey: "", // Replace with your API key
 		UseTLS: true,
 	})
 
