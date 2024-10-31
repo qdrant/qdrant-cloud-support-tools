@@ -1,6 +1,11 @@
 package com.qdrant.app;
 
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
@@ -29,21 +34,35 @@ public class App {
             .withApiKey(apiKey)
             .build())) {
 
-            // Create a new collection in Qdrant
-            client.createCollectionAsync(
-                collectionName,
-                VectorParams.newBuilder()
-                    .setDistance(Distance.Cosine)
-                    .setSize(size)
-                    .build())
-                .get();
-            } catch (InterruptedException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            } catch (ExecutionException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
+            ListenableFuture<Boolean> exists = client.collectionExistsAsync(collectionName);
+
+            /*
+            Futures.addCallback(
+                exists,
+                new FutureCallback<Boolean>() {
+                    public void onSuccess(Boolean exists) {
+                        if (!exists) {
+                            try {client.createCollectionAsync(
+                                collectionName,
+                                VectorParams.newBuilder()
+                                    .setDistance(Distance.Cosine)
+                                    .setSize(size)
+                                    .build())
+                                .get();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            } catch (ExecutionException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                    public void onFailure(Throwable thrown) {
+                        thrown.printStackTrace();
+                    }
+                },
+                client);
+                */
+        }
     }
 }
     
