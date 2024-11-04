@@ -1,5 +1,10 @@
 package com.qdrant.app;
 
+// import static convenience methods
+import static io.qdrant.client.PointIdFactory.id;
+import static io.qdrant.client.ValueFactory.value;
+import static io.qdrant.client.VectorsFactory.vectors;
+
 import java.util.List;
 import java.util.Map;
 
@@ -8,12 +13,8 @@ import io.qdrant.client.QdrantGrpcClient;
 import io.qdrant.client.grpc.Collections.Distance;
 import io.qdrant.client.grpc.Collections.VectorParams;
 import io.qdrant.client.grpc.Points.PointStruct;
-import io.qdrant.client.grpc.Points.UpdateResult;
-
-// import static convenience methods
-import static io.qdrant.client.PointIdFactory.id;
-import static io.qdrant.client.ValueFactory.value;
-import static io.qdrant.client.VectorsFactory.vectors;
+import io.qdrant.client.grpc.Points.ScoredPoint;
+import io.qdrant.client.grpc.Points.SearchPoints;
 
 /**
  * Qdrant Cloud Support Tools: Java API test
@@ -72,8 +73,17 @@ public class App {
                                 "extra_field", value(true)))
                         .build());
             
-            UpdateResult updateResult = client.upsertAsync(collectionName, points).get();
+            client.upsertAsync(collectionName, points).get();
 
+            List<ScoredPoint> hits = client.searchAsync(
+                SearchPoints.newBuilder()
+                    .setCollectionName(collectionName)
+                    .addAllVector(List.of(0.6235f, 0.123f, 0.532f, 0.123f))
+                    .setLimit(5)
+                    .build())
+            .get();
+
+            hits.forEach(e -> System.out.println(e.toString()));
         } catch (Exception e) {
             e.printStackTrace();
         }
