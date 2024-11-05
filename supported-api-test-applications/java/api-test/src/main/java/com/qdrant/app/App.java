@@ -7,6 +7,9 @@ import static io.qdrant.client.VectorsFactory.vectors;
 
 import java.util.List;
 import java.util.Map;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
@@ -25,11 +28,13 @@ public class App {
      */
     public static void main(String[] args) {
 
-        String host = System.getenv("HOST");
-        String apiKey = System.getenv("API_KEY");
+        final Logger log = LogManager.getLogger(App.class);
+
+        final String host = System.getenv("HOST");
+        final String apiKey = System.getenv("API_KEY");
         // Collection parameters
-        String collectionName = "dominic_java_test_collection_1";
-        int size = 4;
+        final String collectionName = "dominic_java_test_collection_1";
+        final int size = 4;
         
         // Create a new client to connect to the Qdrant Managed Cloud
         try (QdrantClient client = 
@@ -48,7 +53,7 @@ public class App {
                 .get();
             }
             catch (java.util.concurrent.ExecutionException e){
-                System.out.printf("%s\n",e.toString());
+                log.printf(Level.INFO, "%s\n", e.toString());
             }
     
             Thread.sleep(1000);
@@ -83,7 +88,7 @@ public class App {
                     .build())
             .get();
 
-            hits.forEach(e -> System.out.println(e.toString()));
+            hits.forEach(e -> log.printf(Level.INFO, e.toString()));
         } catch (Exception e) {
             e.printStackTrace();
         }
