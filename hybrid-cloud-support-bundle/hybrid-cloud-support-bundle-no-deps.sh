@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 
-cd $(dirname $0)
+# check that bash is used
+if [ -z "$BASH_VERSION" ]; then
+    echo "This script must be run with bash"
+    exit 1
+fi
+
+# check that bash version is 3 or higher
+if [ "${BASH_VERSINFO[0]}" -lt 3 ]; then
+    echo "This script requires bash version 3 or higher. You are running: ${BASH_VERSION}"
+    exit 1
+fi
+
 
 set -e
+
+cd $(dirname $0)
+
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
 # Check if the required tools are installed
@@ -44,7 +58,7 @@ echo "Creating Hybrid Cloud support bundle for namespace ${namespace}"
 echo "Testing network connectivity between Kubernetes nodes"
 
 # Testing connectivity
-kubectl -n $namespace apply -f - &>> "${output_log}" <<EOF
+kubectl -n $namespace apply -f -  <<EOF
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -69,7 +83,7 @@ spec:
       terminationGracePeriodSeconds: 1
 EOF
 
-kubectl rollout status daemonset overlaytest -n $namespace &>> "${output_log}"
+kubectl rollout status daemonset overlaytest -n $namespace
 
 mkdir -p "$output_dir/overlaytest"
 
@@ -88,7 +102,7 @@ echo "=> Start network overlay test" > "$output_dir/overlaytest/overlaytest.log"
   done
 echo "=> End network overlay test" >> "$output_dir/overlaytest/overlaytest.log"
 
-kubectl delete daemonset overlaytest -n "$namespace" --wait &>> "${output_log}"
+kubectl delete daemonset overlaytest -n "$namespace" --wait
 
 sleep 3
 
@@ -183,7 +197,7 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
 
     # port-forward
-    kubectl -n "$namespace" port-forward "$pod" 6333:6333 &>> "${output_log}" &
+    kubectl -n "$namespace" port-forward "$pod" 6333:6333  &
     sleep 3
     pid=$!
 
@@ -212,7 +226,7 @@ done
 echo ""
 echo "Getting Kubernetes version"
 # Get kubernetes version
-kubectl version &>> "${output_log}" > "$output_dir/kubernetes-version.txt"
+kubectl version  > "$output_dir/kubernetes-version.txt"
 
 echo ""
 echo "Creating archive"

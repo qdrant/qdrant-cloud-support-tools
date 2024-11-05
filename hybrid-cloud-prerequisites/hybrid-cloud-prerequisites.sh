@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# check that bash is used
+if [ -z "$BASH_VERSION" ]; then
+    echo "This script must be run with bash"
+    exit 1
+fi
+
+# check that bash version is 3 or higher
+if [ "${BASH_VERSINFO[0]}" -lt 3 ]; then
+    echo "This script requires bash version 3 or higher. You are running: ${BASH_VERSION}"
+    exit 1
+fi
+
 cd $(dirname $0)
 
 set -e

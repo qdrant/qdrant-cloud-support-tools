@@ -4,7 +4,7 @@ This tool collects logs and configuration files from a Qdrant Hybrid Cloud envir
 
 ## Prerequisites
 
-This script requires to be run in a Linux, macOS, or Windows environment with WSL. `bash` is required.
+This script requires to be run in a Linux, macOS, or Windows environment with WSL. At least `bash` version 3 is required.
 
 The following tools are required to use this script:
 
