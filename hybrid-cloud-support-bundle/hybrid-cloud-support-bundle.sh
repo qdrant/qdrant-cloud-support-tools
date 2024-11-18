@@ -8,7 +8,7 @@ fi
 
 # check that bash version is 3 or higher
 if [ "${BASH_VERSINFO[0]}" -lt 3 ]; then
-    echo "This script requires bash version 5 or higher. You are running: ${BASH_VERSION}"
+    echo "This script requires bash version 3 or higher. You are running: ${BASH_VERSION}"
     exit 1
 fi
 
