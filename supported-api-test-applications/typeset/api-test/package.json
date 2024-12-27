@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}
