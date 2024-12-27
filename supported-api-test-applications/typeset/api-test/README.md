@@ -1,4 +1,7 @@
 ```
+$ npm install typescript
+$ npm install @qdrant/js-client-rest
+$ npm install ts-node typescript '@types/node'
 $ ts-node src/test.ts 
 url:    https://*******************************************************************:6333
 apiKey: ******************************************************
