@@ -1,5 +1,4 @@
 use std::env;
-//use futures::executor::block_on;
 use qdrant_client::{Qdrant, QdrantError};
 use qdrant_client::qdrant::{CreateCollectionBuilder, 
     Distance, 
