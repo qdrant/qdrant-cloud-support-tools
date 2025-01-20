@@ -155,7 +155,7 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
     curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     echo -n '.'
