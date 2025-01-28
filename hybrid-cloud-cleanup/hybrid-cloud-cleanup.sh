@@ -49,12 +49,18 @@ helm -n "$namespace" delete qdrant-prometheus || true
 helm -n "$namespace" delete qdrant-operator || true
 kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-cloud-agent -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-prometheus -p '{"metadata":{"finalizers":null}}' --type=merge || true
-kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-operator -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-operator-v2 -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-cluster-manager -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-node-exporter -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-cluster-exporter -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-kubernetes-event-exporter -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-cloud-agent" -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-prometheus" -p '{"metadata":{"finalizers":null}}' --type=merge || true
-kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-operator" -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-operator-v2" -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-cluster-manager" -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-node-exporter" -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-cluster-exporter" -p '{"metadata":{"finalizers":null}}' --type=merge || true
+kubectl -n "$namespace" patch HelmChart.cd.qdrant.io "$namespace-qdrant-kubernetes-event-exporter" -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmRepository.cd.qdrant.io qdrant-cloud -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl delete namespace "$namespace" || true
 kubectl get crd -o name | grep qdrant | xargs -n 1 kubectl delete
