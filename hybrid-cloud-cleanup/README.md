@@ -1,5 +1,13 @@
 # hybrid-cloud-cleanup
 
+**WARNING**
+
+```
+THIS WILL DELETE ALL RESOURCES CREATED BY QDRANT
+MAKE SURE YOU HAVE CREATED AND TESTED YOUR BACKUPS
+THIS IS A NON REVERSIBLE ACTION
+```
+
 This repository contains a tool to completely clean up and remove a Qdrant Hybrid Cloud environment from a Kubernetes cluster.
 
 ## Usage
