@@ -33,14 +33,41 @@ if ! command -v helm &> /dev/null; then
 fi
 
 # Get the namespace from the user, if not passed as argument
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <namespace> [-force]"
+    exit 1
+fi
 namespace="$1"
-if [ -z "$namespace" ]; then
-    read -p "Enter the Kubernetes namespace of Qdrant Hybrid cloud: " namespace
-fi;
 
 # Check if the namespace exists
 if ! kubectl get namespace "$namespace" &> /dev/null; then
-    echo "Namespace $namespace does not exist. Please enter a valid namespace."
+    echo "Namespace $namespace does not exist. Please provide a valid namespace."
+    exit 1
+fi
+
+# Warning
+echo "==================== WARNING ====================="
+echo "THIS WILL DELETE ALL RESOURCES CREATED BY QDRANT"
+echo "MAKE SURE YOU HAVE CREATED AND TESTED YOUR BACKUPS"
+echo "THIS IS A NON REVERSIBLE ACTION"
+echo "==================== WARNING ====================="
+echo "Showing configuration info to double check you are executing on the correct cluster:"
+echo "kubectl context: $(kubectl config current-context)"
+kubectl version | grep Server
+echo "Waiting 20 seconds to allow to cancel"
+sleep 20
+
+# Check if QdrantCluster resources are still present
+if [ -n "$(kubectl -n $namespace get qdrantclusters.qdrant.io 2>/dev/null)" ]  && [ "$2" != "-force" ]; then
+    echo "QdrantCluster resources still found in this cluster, see below"
+    echo "====="
+    kubectl -n "$namespace" get qdrantclusters.qdrant.io
+    echo "====="
+    echo "We advise to double check that you want to remove these,"
+    echo "as it is unexpected to still have QdrantCluster resources present"
+    echo "It is strongly recommended to delete all Qdrant clusters from the Hybrid Cloud Environment before proceeding"
+    echo "If you are sure you still want to run this script, add -force parameter to the command"
+    echo "Example: $0 $1 -force"
     exit 1
 fi
 
