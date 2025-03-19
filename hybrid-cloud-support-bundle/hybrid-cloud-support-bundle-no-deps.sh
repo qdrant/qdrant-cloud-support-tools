@@ -164,8 +164,10 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
 
     set +x
     if [ -n "$api_key" ]; then
-        sed -i "s/${api_key}/*****/g" "$output_dir/output.log"
-        sed -i "s/${api_key}/*****/g" "$output_dir/trace.log"
+        # Escape special characters in the API key
+        escaped_api_key=$(printf '%s\n' "$api_key" | sed 's/[]\/$*.^[]/\\&/g')
+        sed -i -e "s|${escaped_api_key}|*****|g" "$output_dir/output.log"
+        sed -i -e "s|${escaped_api_key}|*****|g" "$output_dir/trace.log"
     fi
     set -x
 
