@@ -176,8 +176,12 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     if [ -n "$api_key" ]; then
         # Escape special characters in the API key
         escaped_api_key=$(printf '%s\n' "$api_key" | sed 's/[]\/$*.^[]/\\&/g')
-        sed -i -e "s|${escaped_api_key}|*****|g" "$output_dir/output.log"
-        sed -i -e "s|${escaped_api_key}|*****|g" "$output_dir/trace.log"
+
+        # Process each file with sed and save to a temp file then move it back
+        for file in "$output_dir/output.log" "$output_dir/trace.log"; do
+            sed "s|${escaped_api_key}|***|g" "$file" > "${file}.tmp"
+            mv "${file}.tmp" "$file"
+        done
     fi
     set -x
 
