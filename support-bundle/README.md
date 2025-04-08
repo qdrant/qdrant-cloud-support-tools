@@ -1,6 +1,6 @@
-# Hybrid Cloud Support Bundle
+# Qdrant Hybrid Cloud / Private Cloud Support Bundle
 
-This tool collects logs and configuration files from a Qdrant Hybrid Cloud environment and all managed Qdrant database clusters, and bundles them in a `tgz` archive for easy sharing with Qdrant Support Engineers.
+This tool collects logs and configuration files from a Qdrant Hybrid Cloud or Private Cloud environment and all managed Qdrant database clusters in it. It bundles them in a `tgz` archive for easy sharing with Qdrant Support Engineers.
 
 ## Prerequisites
 
@@ -17,17 +17,17 @@ If you're unable to install the required dependencies, please use the `no-deps.s
 
 ## Usage
 
-1. Clone this repository or download `hybrid-cloud-support-bundle.sh`
+1. Clone this repository or download `support-bundle.sh`
 ```bash
-wget https://raw.githubusercontent.com/qdrant/qdrant-cloud-support-tools/main/hybrid-cloud-support-bundle/hybrid-cloud-support-bundle.sh 
+wget https://raw.githubusercontent.com/qdrant/qdrant-cloud-support-tools/main/support-bundle/support-bundle.sh 
 ```
 2. Make sure that script is executable
 ```bash
-chmod +x hybrid-cloud-support-bundle.sh
+chmod +x support-bundle.sh
 ```
 3. Run the script
 ```bash
-./hybrid-cloud-support-bundle.sh the-qdrant-namespace
+./support-bundle.sh the-qdrant-namespace
 ```
 
 ## Collected data
