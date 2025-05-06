@@ -74,6 +74,9 @@ fi
 helm -n "$namespace" delete qdrant-cloud-agent || true
 helm -n "$namespace" delete qdrant-prometheus || true
 helm -n "$namespace" delete qdrant-operator || true
+helm -n "$namespace" delete qdrant-operator-v2 || true
+helm -n "$namespace" delete qdrant-cluster-exporter || true
+helm -n "$namespace" delete qdrant-cluster-manager || true
 kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-cloud-agent -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-prometheus -p '{"metadata":{"finalizers":null}}' --type=merge || true
 kubectl -n "$namespace" patch HelmRelease.cd.qdrant.io qdrant-operator-v2 -p '{"metadata":{"finalizers":null}}' --type=merge || true
