@@ -34,7 +34,7 @@ fi
 # Get the namespace from the user, if not passed as argument
 namespace="$1"
 if [ -z "$namespace" ]; then
-    read -p "Enter the Kubernetes namespace of Qdrant Hybrid cloud: " namespace
+    read -p "Enter the Kubernetes namespace of Qdrant Cloud: " namespace
 fi;
 
 # Check if the namespace exists
@@ -44,7 +44,7 @@ if ! kubectl get namespace "$namespace" &> /dev/null; then
 fi
 
 # Ensure output directory exists
-output_dir="hybrid-cloud-support-bundle-$(date +%Y%m%d%H%M%S)"
+output_dir="qdrant-cloud-support-bundle-$(date +%Y%m%d%H%M%S)"
 output_log="$output_dir/output.log"
 mkdir -p "$output_dir"
 
@@ -53,7 +53,7 @@ BASH_XTRACEFD="5"
 PS4='$LINENO: '
 set -x
 
-echo "Creating Hybrid Cloud support bundle for namespace ${namespace}"
+echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
 
 echo ""
 echo "Getting Kubernetes resources"
