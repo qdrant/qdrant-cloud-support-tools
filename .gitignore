@@ -3,6 +3,7 @@
 .vscode
 
 hybrid-cloud-support-bundle-*
+qdrant-cloud-support-bundle-*
 
 ######################
 # golang
