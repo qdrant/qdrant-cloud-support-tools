@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from contextlib import contextmanager
-from typing import Optional, Dict, Any, List, Generator
+from typing import Optional, Dict, Any, List, Generator, Tuple
 
 import requests
 import re
@@ -74,7 +74,7 @@ def get_api_key(cluster_id: str, namespace: str) -> Optional[str]:
         return None
 
 
-def get_filtered_pods(namespace: str) -> (List[str], Optional[str]):
+def get_filtered_pods(namespace: str) -> Tuple[List[str], Optional[str]]:
     """
     Fetches all pods in the specified namespace, filters out service-related pods,
     and extracts the cluster ID from the first relevant pod.
