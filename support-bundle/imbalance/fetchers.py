@@ -26,6 +26,11 @@ def extract_cluster_id(pod_name: str) -> Optional[str]:
     match = re.match(r"qdrant-([a-z0-9\-]+)-\d+", pod_name)
     return match.group(1) if match else None
 
+def is_cluster_pod(pod_name: str, cluster_id: str) -> bool:
+    """
+    Checks if the pod belongs to the cluster with the given cluster_id.
+    """
+    return bool(re.match(rf"qdrant-{cluster_id}-\d+", pod_name))
 
 def wait_for_port(host: str, port: int, timeout: float = 10.0) -> bool:
     """
@@ -89,17 +94,26 @@ def get_filtered_pods(namespace: str) -> Tuple[List[str], Optional[str]]:
             check=True,
         )
         pods_json = json.loads(result.stdout)
-        relevant_pods = [
-            pod["metadata"]["name"]
-            for pod in pods_json["items"]
-            if extract_cluster_id(pod["metadata"]["name"])
-        ]
+        all_pods = [pod["metadata"]["name"] for pod in pods_json["items"]]
+
+        # Extract cluster ID from the first relevant pod
+        cluster_id = None
+        for pod_name in all_pods:
+            cluster_id = extract_cluster_id(pod_name)
+            if cluster_id:
+                break
+
+        if not cluster_id:
+            logger.warning("No cluster ID could be determined from the pod names.")
+            return [], None
+
+        # Filter pods that belong to the cluster
+        relevant_pods = [pod_name for pod_name in all_pods if is_cluster_pod(pod_name, cluster_id)]
+
         if not relevant_pods:
             logger.warning("No relevant pods found in the namespace.")
             return [], None
 
-        # Extract cluster ID from the first relevant pod
-        cluster_id = extract_cluster_id(relevant_pods[0])
         return relevant_pods, cluster_id
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to get pods: {e}")
