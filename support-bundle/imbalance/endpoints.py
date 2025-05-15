@@ -1,0 +1,13 @@
+from enum import Enum
+
+# see https://docs.python.org/3/library/enum.html
+
+class Endpoint(Enum):
+    """
+    The endpoints are used to fetch telemetry, collections, and cluster information.
+    """
+
+    TELEMETRY = "/telemetry?details_level=3"
+    COLLECTIONS = "/collections"
+    COLLECTION = "/collections/{name}"
+    CLUSTER = "/collections/{name}/cluster"

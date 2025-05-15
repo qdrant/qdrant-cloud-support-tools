@@ -112,81 +112,64 @@ done
 echo ""
 echo "Getting Qdrant telemetry"
 
-# Get telemetry of Qdrant Pods
-mkdir -p "$output_dir/qdrant-telemetry"
-for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${output_log}"); do
-    pod_name=$(echo $pod | cut -d '/' -f 2)
+# Commented out API calls as they will be handled in the Python script
+# mkdir -p "$output_dir/qdrant-telemetry"
+# for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${output_log}"); do
+#     pod_name=$(echo $pod | cut -d '/' -f 2)
 
-    pod_status=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>> "${output_log}")
-    if [ "$pod_status" != "Running" ]; then
-        echo ""
-        echo "Skipping $pod_name as it is not running"
-        echo ""
-        continue
-    fi
+#     pod_status=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>> "${output_log}")
+#     if [ "$pod_status" != "Running" ]; then
+#         echo ""
+#         echo "Skipping $pod_name as it is not running"
+#         echo ""
+#         continue
+#     fi
 
-    cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
-    cluster_name="qdrant-$cluster_id"
+#     cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
+#     cluster_name="qdrant-$cluster_id"
 
-    # get secret reference from pod environment variable
-    api_key_secret_name=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.spec.containers[0].env[?(@.name=="QDRANT__SERVICE__API_KEY")].valueFrom.secretKeyRef.name}' 2>> "${output_log}")
-    echo -n '.'
-    api_key_secret_key=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.spec.containers[0].env[?(@.name=="QDRANT__SERVICE__API_KEY")].valueFrom.secretKeyRef.key}' 2>> "${output_log}")
-    echo -n '.'
-    # get api key
-    api_key=$(kubectl -n "$namespace" get secret "$api_key_secret_name" -o jsonpath="{.data.$api_key_secret_key}" 2>> "${output_log}" | base64 -d)
-    echo -n '.'
-    tls_active=$(kubectl -n "$namespace" get configmap "$cluster_name" -o jsonpath='{.data.production\.yaml}' 2>> "${output_log}")
-    echo -n '.'
+#     # port-forward
+#     kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
+#     sleep 3
+#     pid=$!
 
-    args=()
+#     # Fetch telemetry
+#     curl -s "http://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-telemetry.json"
+#     echo -n '.'
 
-    protocol="http"
-    if [[ "$tls_active" =~ "enable_tls: true" ]]; then
-        protocol="https"
-        args+=(-k)
-    fi
+#     # Fetch cluster info
+#     curl -s "http://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-cluster.json"
+#     echo -n '.'
 
-    # port-forward
-    kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
-    sleep 3
-    pid=$!
+#     # Fetch collections and related data
+#     collections=$(curl -s "http://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
+#     echo -n '.'
+#     for collection in $collections; do
+#         curl -s "http://localhost:6333/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-collection-$collection.json"
+#         echo -n '.'
+#         curl -s "http://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-collection-$collection-cluster.json"
+#         echo -n '.'
+#     done
 
-    # authenticate if api key is set
-    if [ -n "$api_key" ]; then
-        args+=(-H "Authorization: Bearer $api_key")
-    fi
+#     kill $pid 2>> "${output_log}"
+# done
 
-    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
-    echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
-    echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
-    echo -n '.'
-    collections=$(curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
-    echo -n '.'
-    for collection in $collections; do
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
-        echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
-        echo -n '.'
-    done
+echo ""
+echo "Running imbalance analysis"
 
-    set +x
-    if [ -n "$api_key" ]; then
-        # Escape special characters in the API key
-        escaped_api_key=$(printf '%s\n' "$api_key" | sed 's/[]\/$*.^[]/\\&/g')
+# Get the cluster ID from the first pod in the namespace
+cluster_id=$(kubectl -n "$namespace" get pods -o jsonpath='{.items[0].metadata.labels.cluster-id}' 2>> "${output_log}")
 
-        # Process each file with sed and save to a temp file then move it back
-        for file in "$output_dir/output.log" "$output_dir/trace.log"; do
-            sed "s|${escaped_api_key}|***|g" "$file" > "${file}.tmp"
-            mv "${file}.tmp" "$file"
-        done
-    fi
-    set -x
+if [ -z "$cluster_id" ]; then
+    echo "Error: Unable to determine cluster ID. Ensure that pods in the namespace have the 'cluster-id' label."
+    exit 1
+fi
 
-    kill $pid 2>> "${output_log}"
-done
+echo "Detected cluster ID: $cluster_id"
+
+# Run Python script for telemetry and imbalance analysis
+script_dir=$(cd "$(dirname "$0")" && pwd)
+python "$script_dir/imbalance/cli.py" --namespace "$namespace" --output-dir "$output_dir" > "$output_dir/imbalance-report.txt"
 
 echo ""
 echo "Getting Kubernetes version"
@@ -203,4 +186,4 @@ echo ""
 echo "Support bundle is saved in $output_dir.tar.gz"
 
 # Remove the output directory
-rm -rf "$output_dir"
+#rm -rf "$output_dir"
