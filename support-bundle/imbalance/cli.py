@@ -67,19 +67,17 @@ def main():
 
     logger.info("\nStarting node report analysis...")
 
-    report_path = os.path.join(args.output_dir, "imbalance-report.txt")
-    with open(report_path, "w") as report_file:
-        if os.path.exists(cluster_dir):
-            generate_node_report(cluster_dir=cluster_dir)
-            report_file.write("Cluster analysis completed.\n")
-        else:
-            report_file.write("Cluster directory does not exist. Skipping cluster analysis.\n")
+    if os.path.exists(cluster_dir):
+        logger.debug(f"Cluster directory exists: {cluster_dir}")
+        generate_node_report(cluster_dir=cluster_dir)
+    else:
+        logger.warning(f"Cluster directory {cluster_dir} does not exist. Skipping cluster analysis.")
 
-        if os.path.exists(collection_dir):
-            analyze_collections(collection_dir=collection_dir, cluster_dir=cluster_dir)
-            report_file.write("Collection analysis completed.\n")
-        else:
-            report_file.write("Collection directory does not exist. Skipping collection analysis.\n")
+    if os.path.exists(collection_dir):
+        logger.debug(f"Collection directory exists: {collection_dir}")
+        analyze_collections(collection_dir=collection_dir, cluster_dir=cluster_dir)
+    else:
+        logger.warning(f"Collection directory {collection_dir} does not exist. Skipping collection analysis.")
 
     logger.info("\nNode report analysis completed.")
 

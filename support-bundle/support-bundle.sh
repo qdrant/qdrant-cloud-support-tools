@@ -169,7 +169,8 @@ echo "Detected cluster ID: $cluster_id"
 
 # Run Python script for telemetry and imbalance analysis
 script_dir=$(cd "$(dirname "$0")" && pwd)
-python "$script_dir/imbalance/cli.py" --namespace "$namespace" --output-dir "$output_dir" > "$output_dir/imbalance-report.txt"
+python "$script_dir/imbalance/cli.py" --namespace "$namespace" --output-dir "$output_dir" >> "$output_dir/imbalance-report.txt" 2>&1
+#python "$script_dir/imbalance/cli.py" --namespace "$namespace" --output-dir "$output_dir" 2>&1 | tee "$output_dir/imbalance-report.txt"
 
 echo ""
 echo "Getting Kubernetes version"
