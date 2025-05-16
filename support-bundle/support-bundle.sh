@@ -12,6 +12,30 @@ if [ "${BASH_VERSINFO[0]}" -lt 3 ]; then
     exit 1
 fi
 
+# Check if Python 3 is installed
+if ! command -v python3 &>/dev/null; then
+    echo "python3 is not installed. Please install Python 3.8 or higher and try again."
+    exit 1
+fi
+
+# Check Python version
+PYVER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+REQ="3.8"
+# Compare versions
+if [ "$(printf '%s\n' "$REQ" "$PYVER" | sort -V | head -n1)" != "$REQ" ]; then
+    echo "Python version must be >= $REQ. Found $PYVER"
+    exit 1
+fi
+
+# Check if the required Python modules are installed
+if ! python3 - <<'PYCODE' 2>/dev/null
+import requests
+PYCODE
+then
+    echo "Python module 'requests' is missing. Install with: pip3 install requests"
+    exit 1
+fi
+
 cd $(dirname $0)
 
 set -e
@@ -108,51 +132,6 @@ for node in $nodes; do
     kubectl top node "$node" 2>> "${output_log}" > "$output_dir/node-resource-usage/$node.txt" || true
     echo -n '.'
 done
-
-echo ""
-echo "Getting Qdrant telemetry"
-
-# Commented out API calls as they will be handled in the Python script
-# mkdir -p "$output_dir/qdrant-telemetry"
-# for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${output_log}"); do
-#     pod_name=$(echo $pod | cut -d '/' -f 2)
-
-#     pod_status=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>> "${output_log}")
-#     if [ "$pod_status" != "Running" ]; then
-#         echo ""
-#         echo "Skipping $pod_name as it is not running"
-#         echo ""
-#         continue
-#     fi
-
-#     cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
-#     cluster_name="qdrant-$cluster_id"
-
-#     # port-forward
-#     kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
-#     sleep 3
-#     pid=$!
-
-#     # Fetch telemetry
-#     curl -s "http://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-telemetry.json"
-#     echo -n '.'
-
-#     # Fetch cluster info
-#     curl -s "http://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-cluster.json"
-#     echo -n '.'
-
-#     # Fetch collections and related data
-#     collections=$(curl -s "http://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
-#     echo -n '.'
-#     for collection in $collections; do
-#         curl -s "http://localhost:6333/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-collection-$collection.json"
-#         echo -n '.'
-#         curl -s "http://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$pod_name-collection-$collection-cluster.json"
-#         echo -n '.'
-#     done
-
-#     kill $pid 2>> "${output_log}"
-# done
 
 echo ""
 echo "Running imbalance analysis"
