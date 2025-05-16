@@ -30,10 +30,13 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     cluster_dir = os.path.join(args.output_dir, "cluster")
+    cluster_general_dir = os.path.join(cluster_dir, "cluster-general")
+
     collection_dir = os.path.join(args.output_dir, "collection")
     telemetry_dir = os.path.join(args.output_dir, "telemetry")
 
     os.makedirs(cluster_dir, exist_ok=True)
+    os.makedirs(cluster_general_dir, exist_ok=True)
     os.makedirs(collection_dir, exist_ok=True)
     os.makedirs(telemetry_dir, exist_ok=True)
 

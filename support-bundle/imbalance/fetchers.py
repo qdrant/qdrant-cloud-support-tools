@@ -264,6 +264,18 @@ def fetch_cluster_info(
     path = Endpoint.CLUSTER.value.format(name=collection)
     return _execute_query(pod_name, api_key, path, port, output_file)
 
+def fetch_clr_info(
+    pod_name: str,
+    namespace: str,
+    api_key: Optional[str],
+    port: int,
+    output_file: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Fetch general cluster info via Endpoint.CLR.
+    """
+    path = Endpoint.CLR.value
+    return _execute_query(pod_name, api_key, path, port, output_file)
 
 def process_pod(
     pod_name: str,
@@ -280,6 +292,10 @@ def process_pod(
         # Fetch telemetry for the current pod
         telemetry_filename = os.path.join(output_dir, f"telemetry/telemetry_{pod_name}.json")
         fetch_telemetry(pod_name, namespace, api_key, port, telemetry_filename)
+
+        # Fetch general cluster info for the current pod
+        general_cluster_file = os.path.join(output_dir, "cluster", "cluster-general", f"{pod_name}-cluster.json")
+        fetch_clr_info(pod_name, namespace, api_key, port, general_cluster_file)
 
         # Fetch collections using the cache
         collections = collection_cache.get_collections(pod_name, namespace, api_key, port, fetch_collections)
