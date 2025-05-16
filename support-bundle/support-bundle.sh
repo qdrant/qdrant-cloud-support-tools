@@ -13,13 +13,13 @@ if [ "${BASH_VERSINFO[0]}" -lt 3 ]; then
 fi
 
 # Check if Python 3 is installed
-if ! command -v python3 &>/dev/null; then
+if ! command -v python &>/dev/null; then
     echo "python3 is not installed. Please install Python 3.8 or higher and try again."
     exit 1
 fi
 
 # Check Python version
-PYVER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+PYVER="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 REQ="3.8"
 # Compare versions
 if [ "$(printf '%s\n' "$REQ" "$PYVER" | sort -V | head -n1)" != "$REQ" ]; then
@@ -28,7 +28,7 @@ if [ "$(printf '%s\n' "$REQ" "$PYVER" | sort -V | head -n1)" != "$REQ" ]; then
 fi
 
 # Check if the required Python modules are installed
-if ! python3 - <<'PYCODE' 2>/dev/null
+if ! python - <<'PYCODE' 2>/dev/null
 import requests
 PYCODE
 then
@@ -149,7 +149,6 @@ echo "Detected cluster ID: $cluster_id"
 # Run Python script for telemetry and imbalance analysis
 script_dir=$(cd "$(dirname "$0")" && pwd)
 python "$script_dir/imbalance/cli.py" --namespace "$namespace" --output-dir "$output_dir" >> "$output_dir/imbalance-report.txt" 2>&1
-#python "$script_dir/imbalance/cli.py" --namespace "$namespace" --output-dir "$output_dir" 2>&1 | tee "$output_dir/imbalance-report.txt"
 
 echo ""
 echo "Getting Kubernetes version"
