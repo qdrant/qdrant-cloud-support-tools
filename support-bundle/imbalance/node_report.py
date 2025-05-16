@@ -11,12 +11,6 @@ logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 logger.propagate = False 
 
-# Keys reference: https://docs.google.com/document/d/1wKcUN2qZu1EXPEVFFPST36UkYGsojthzYQeG-Aardd4
-
-# To run:
-# python node_report.py
-# Make sure you have the folder structure: out/cluster | out/collection | out/telemetry
-
 def calculate_totals(peer_data: Dict[str, Dict[str, Any]], cluster_dir: str) -> Dict[str, int]:
     """
     Calculate total points, shards, active shards, inactive shards, remote shards, shard transfers, and peers.
@@ -170,8 +164,6 @@ def analyze_collections(collection_dir: str, cluster_dir: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze cluster and collection data.")
-    # You can run it directly:
-    #   python node_report.py --output-dir ./out
     parser.add_argument("--output-dir", default="out",
                         help="Base directory containing cluster and collection subdirectories.")
     args = parser.parse_args()
@@ -179,7 +171,6 @@ if __name__ == "__main__":
     cluster_dir = os.path.join(args.output_dir, "cluster")
     collection_dir = os.path.join(args.output_dir, "collection")
 
-    # Make sure you have the folder structure: ./out/cluster | ./out/collection | ./out/telemetry
     if os.path.exists(cluster_dir):
         generate_node_report(cluster_dir=cluster_dir)
     else:

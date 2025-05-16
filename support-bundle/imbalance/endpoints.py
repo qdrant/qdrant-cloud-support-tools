@@ -1,7 +1,5 @@
 from enum import Enum
 
-# see https://docs.python.org/3/library/enum.html
-
 class Endpoint(Enum):
     """
     The endpoints are used to fetch telemetry, collections, and cluster information.

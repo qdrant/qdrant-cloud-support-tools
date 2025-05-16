@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Fetch telemetry, collections, and cluster data from Qdrant pods."
     )
-    parser.add_argument("--namespace", default=DEFAULT_NAMESPACE, help="Kubernetes namespace (default: DEFAULT_NAMESPACE)")
+    parser.add_argument("--namespace", default=DEFAULT_NAMESPACE, help="Kubernetes namespace (default: qdrant")
     parser.add_argument("--output-dir", default=".", help="Directory where JSON files will be saved (default: current directory)")
     args = parser.parse_args()
 

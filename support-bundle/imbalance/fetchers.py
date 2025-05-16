@@ -16,7 +16,7 @@ from cache import CollectionCache
 logger = logging.getLogger(__name__)
 
 DEFAULT_REMOTE_PORT = 6333
-DEFAULT_NAMESPACE = "qdrant-cloud-client-standard-tier"
+DEFAULT_NAMESPACE = "qdrant"
 
 def extract_cluster_id(pod_name: str) -> Optional[str]:
     """
@@ -45,11 +45,6 @@ def wait_for_port(host: str, port: int, timeout: float = 10.0) -> bool:
         except OSError:
             time.sleep(0.2)
     return False
-
-
-# Obtaining the API key to be able to do port-forward
-# Please check this page:
-# https://www.notion.so/qdrant/Query-a-Managed-Cloud-Cluster-with-JWT-RBAC-enabled-151674779d3380879b0bce03aa76df29?pvs=4
 
 
 def get_api_key(cluster_id: str, namespace: str) -> Optional[str]:
