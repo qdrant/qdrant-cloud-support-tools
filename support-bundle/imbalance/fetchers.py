@@ -148,7 +148,7 @@ def port_forward_context(pod_name: str, namespace: str, remote_port: int = DEFAU
         if not wait_for_port("localhost", local_port):
             raise RuntimeError(f"Failed to forward port for {pod_name}")
         logger.info(f"Port-forward ready on localhost:{local_port} for pod {pod_name}")
-        yield local_port  # <<< Provide the local port for use by wait_for_port - look at the context manager doc https://docs.python.org/3/library/contextlib.html
+        yield local_port
     # Guaranteed close afterwards
     finally:
         logger.info(f"Closing port-forward for pod {pod_name}")
