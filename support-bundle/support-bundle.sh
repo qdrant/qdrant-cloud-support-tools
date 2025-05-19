@@ -165,4 +165,4 @@ echo ""
 echo "Support bundle is saved in $output_dir.tar.gz"
 
 # Remove the output directory
-#rm -rf "$output_dir"
+rm -rf "$output_dir"

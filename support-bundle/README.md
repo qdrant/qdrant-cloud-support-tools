@@ -10,10 +10,28 @@ The following tools are required to use this script:
 
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [jq](https://jqlang.github.io/jq/download/)
+- [Python 3.7+](https://www.python.org/downloads/)
 
 If you're unable to install the required dependencies, please use the `no-deps.sh` script as an alternative.
 
 `kubectl` must be configured to access the Kubernetes cluster of your Qdrant Hybrid Cloud environment.
+
+## Installing dependencies
+
+This script requires Python dependencies to be installed. To ensure compatibility, a `requirements.txt` file is provided with the exact versions of the required libraries.
+
+1. **Create a virtual environment (optional but recommended):**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. **Install the dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+If you encounter any issues, ensure that your Python version is 3.7 or higher and that all dependencies are installed correctly.
 
 ## Usage
 
@@ -21,7 +39,7 @@ If you're unable to install the required dependencies, please use the `no-deps.s
 ```bash
 wget https://raw.githubusercontent.com/qdrant/qdrant-cloud-support-tools/main/support-bundle/support-bundle.sh 
 ```
-2. Make sure that script is executable
+2. Make sure that the script is executable
 ```bash
 chmod +x support-bundle.sh
 ```
@@ -29,6 +47,32 @@ chmod +x support-bundle.sh
 ```bash
 ./support-bundle.sh the-qdrant-namespace
 ```
+
+## What the script does
+
+The `support-bundle.sh` script performs the following steps:
+
+1. **Collects Kubernetes resources**:
+   - YAML definitions of `kubectl describe` output, including events and status of resources in the Qdrant namespace.
+   - Logs from all pods in the Qdrant namespace.
+   - Kubernetes version.
+   - Results of the Kubernetes metrics API for all nodes and pods in the Qdrant namespace (if available).
+
+2. **Delegates Qdrant-specific data collection to a Python script**:
+   - The Python script (`imbalance/cli.py`) collects data from Qdrant database endpoints, including:
+     - Telemetry endpoint.
+     - Cluster information endpoint.
+     - Collection list endpoint.
+     - Collection configuration endpoint.
+     - Collection cluster information endpoint.
+   - Performs imbalance analysis:
+     - Distribution of shards and points across nodes.
+     - Collection configuration details.
+     - Shard states (active/inactive).
+     - HNSW configuration and quantization settings.
+
+3. **Packages all collected data**:
+   - Bundles the collected data into a `tgz` archive for easy sharing.
 
 ## Collected data
 
@@ -62,5 +106,10 @@ chmod +x support-bundle.sh
   * Collection configuration endpoint
   * Collection cluster information endpoint
 * Network Connectivity between pods in the Qdrant namespace
+* **Imbalance analysis**:
+  * Distribution of shards and points across nodes
+  * Collection configuration details
+  * Shard states (active/inactive)
+  * HNSW configuration and quantization settings
 
-The support bundle does not contain any user data stored int the Qdrant database, on volumes or snapshots, or sensitive information like API keys or certificates.
+The support bundle does not contain any user data stored in the Qdrant database, on volumes or snapshots, or sensitive information like API keys or certificates.
