@@ -6,6 +6,9 @@ from cache import CollectionCache
 from node_report import generate_node_report, analyze_collections
 
 def configure_logging() -> logging.Logger:
+    """
+    Configures logging for the CLI tool.
+    """
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
@@ -15,16 +18,15 @@ def configure_logging() -> logging.Logger:
 def main():
     """
     Main entry point for the CLI tool.
+    Fetches telemetry, collections, and cluster data from Qdrant pods.
     """
     parser = argparse.ArgumentParser(
         description="Fetch telemetry, collections, and cluster data from Qdrant pods."
     )
-    parser.add_argument("--namespace", default=DEFAULT_NAMESPACE, help="Kubernetes namespace (default: qdrant")
+    parser.add_argument("--namespace", default=DEFAULT_NAMESPACE, help="Kubernetes namespace (default: DEFAULT_NAMESPACE)")
     parser.add_argument("--output-dir", default=".", help="Directory where JSON files will be saved (default: current directory)")
     args = parser.parse_args()
 
-    # Configure logging
-    global logger
     logger = configure_logging()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -40,7 +42,6 @@ def main():
     os.makedirs(collection_dir, exist_ok=True)
     os.makedirs(telemetry_dir, exist_ok=True)
 
-    # Fetch and filter pods
     relevant_pods, cluster_id = get_filtered_pods(namespace=args.namespace)
     if not relevant_pods or not cluster_id:
         logger.error("Failed to find relevant pods or determine cluster ID.")
@@ -49,7 +50,6 @@ def main():
     logger.info(f"Determined cluster ID: {cluster_id}")
     logger.info(f"Found {len(relevant_pods)} relevant pods for cluster {cluster_id}")
 
-    # Fetch API key
     try:
         api_key = get_api_key(cluster_id, args.namespace)
         if api_key:
@@ -66,9 +66,8 @@ def main():
         logger.info(f"Processing pod: {pod}")
         process_pod(pod, args.namespace, api_key, idx, args.output_dir, collection_cache)
 
-    logger.info("\nProcessing completed successfully.")
-
-    logger.info("\nStarting node report analysis...")
+    logger.info("Processing completed successfully.")
+    logger.info("Starting node report analysis...")
 
     if os.path.exists(cluster_dir):
         logger.debug(f"Cluster directory exists: {cluster_dir}")
@@ -82,8 +81,7 @@ def main():
     else:
         logger.warning(f"Collection directory {collection_dir} does not exist. Skipping collection analysis.")
 
-    logger.info("\nNode report analysis completed.")
-
+    logger.info("Node report analysis completed.")
 
 if __name__ == "__main__":
     main()
