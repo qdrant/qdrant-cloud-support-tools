@@ -9,7 +9,8 @@ WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
 COPY imbalance /app/imbalance
+
 RUN pip install -r /app/requirements.txt
 RUN pip install requests kubernetes
 
-CMD ["python", "/app/imbalance/cli.py"]
+CMD ["bash","-c","python /app/imbalance/cli.py --output-dir out && echo 'Sleeping to allow cp...' && sleep 300"]

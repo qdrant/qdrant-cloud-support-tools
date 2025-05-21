@@ -32,23 +32,21 @@ roleRef:
   name: support-bundle-role
   apiGroup: rbac.authorization.k8s.io
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: support-bundle
+  name: support-bundle-job
   namespace: qdrant
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: support-bundle
+  ttlSecondsAfterFinished: 600
   template:
     metadata:
       labels:
         app: support-bundle
     spec:
+      restartPolicy: Never
       serviceAccountName: support-bundle-sa
       containers:
         - name: bundle
-          image: zettertty/qdrant-support-bundle:v0.20
+          image: zettertty/qdrant-support-bundle:v0.4
           imagePullPolicy: IfNotPresent
