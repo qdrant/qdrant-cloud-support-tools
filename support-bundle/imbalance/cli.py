@@ -117,7 +117,7 @@ def main():
     logger.info("Processing completed successfully.")
     logger.info("Starting node report analysis...")
 
-    # Generate reports (these use print(), now captured by Tee)
+    # Generate reports (these use print, now captured by Tee)
     if os.path.exists(cluster_dir):
         generate_node_report(cluster_dir=cluster_dir)
     else:
@@ -136,10 +136,19 @@ def main():
     report_fd.close()
 
     # # Archive and clean up
-    # abs_out = os.path.abspath(args.output_dir)
-    # archive_path = shutil.make_archive(abs_out, 'zip', root_dir=abs_out)
-    # shutil.rmtree(abs_out)
-    # print(f"Output directory archived at {archive_path}", file=sys.stderr)
+    # cwd = os.getcwd()
+    # bundle_name = "qdrant-cloud-support-bundle"
+    # archive_path = shutil.make_archive(
+    #     base_name=os.path.join(cwd, bundle_name),
+    #     format="gztar",
+    #     root_dir=os.path.join(cwd, args.output_dir)
+    # )
+    # shutil.rmtree(os.path.join(cwd, args.output_dir))
+    # print(f"Archive created at {archive_path}", file=sys.stderr)
+
+    # # **Keep the container alive** to allow `kubectl cp` to work
+    # print("Bundle ready, sleeping for 1 hour to allow kubectl cp...", file=sys.stderr)
+    # time.sleep(3600)
 
     # Archive and clean up
     cwd = os.getcwd()
@@ -152,9 +161,10 @@ def main():
     shutil.rmtree(os.path.join(cwd, args.output_dir))
     print(f"Archive created at {archive_path}", file=sys.stderr)
 
-    # **Keep the container alive** to allow `kubectl cp` to work
-    print("Bundle ready, sleeping for 1 hour to allow kubectl cp...", file=sys.stderr)
-    time.sleep(3600)
+    # Bundle is ready; keep this container running so that kubectl cp can fetch it.
+    print("Bundle ready, entering sleep loop until job is deleted...", file=sys.stderr)
+    while True:
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()

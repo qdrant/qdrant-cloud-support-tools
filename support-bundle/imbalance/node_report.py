@@ -42,7 +42,6 @@ def calculate_totals(peer_data: Dict[str, Dict[str, Any]], cluster_dir: str) -> 
 
             shard_transfers += len(result.get('shard_transfers', []))
             unique_peers.add(result.get('peer_id', 'Unknown'))
-            # extract collection name from filename
             collection_name = file_name.rsplit('-', 1)[-1].replace('.json', '')
             collections.add(collection_name)
 
@@ -61,7 +60,6 @@ def generate_node_report(cluster_dir: str) -> None:
     """
     Print imbalance analysis grouped by peer ID for all cluster JSON files.
     """
-    # collect per-peer data
     peer_data: Dict[str, Dict[str, Any]] = {}
 
     for file_name in os.listdir(cluster_dir):
@@ -85,15 +83,12 @@ def generate_node_report(cluster_dir: str) -> None:
             peer_data[peer_id]['shards'] += shards
             peer_data[peer_id]['files'].append(file_name)
 
-    # print report header
     print("\n=== Imbalance Analysis per Peer ===")
-    # sort by points descending
     sorted_peers = sorted(peer_data.items(), key=lambda x: x[1]['points'], reverse=True)
     for idx, (peer_id, data) in enumerate(sorted_peers, start=1):
         files_list = ", ".join(data['files'])
         print(f"{idx}. Peer ID={peer_id}, Points={data['points']}, Shards={data['shards']}, Files=[{files_list}]")
 
-    # print totals
     print("\n=== Total Summary ===")
     totals = calculate_totals(peer_data, cluster_dir)
     print(f"Total Points: {totals['total_points']}")
