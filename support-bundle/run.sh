@@ -6,13 +6,10 @@ JOB=support-bundle-job
 LABEL=app=support-bundle
 BUNDLE=qdrant-cloud-support-bundle.tar.gz
 
-# Delete any previous job
 kubectl delete job $JOB -n $NAMESPACE --ignore-not-found
 
-# Launch the job
 kubectl apply -f support-bundle-job.yaml
 
-# Wait until the pod is Running
 kubectl wait pod -l $LABEL -n $NAMESPACE --for=condition=Ready --timeout=600s
 POD=$(kubectl get pods -l $LABEL -n $NAMESPACE -o jsonpath='{.items[0].metadata.name}')
 echo "Found running pod: $POD"
@@ -30,5 +27,4 @@ echo "Copying /app/$BUNDLE from $POD..."
 kubectl cp $NAMESPACE/$POD:/app/$BUNDLE ./$BUNDLE -c bundle
 echo "Bundle saved locally as ./$BUNDLE"
 
-# Now you can delete the job
 # kubectl delete job $JOB -n $NAMESPACE
