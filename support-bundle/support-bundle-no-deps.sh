@@ -56,10 +56,16 @@ set -x
 echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
 
 echo ""
+echo "Getting nodes running Qdrant pods"
+
+# Get the list of nodes that are running Qdrant pods (only collect info for these nodes)
+qdrant_nodes=$(kubectl -n "$namespace" get pods -o jsonpath='{.items[*].spec.nodeName}' 2>> "${output_log}" | tr ' ' '\n' | grep -v '^$' | sort -u)
+
+echo ""
 echo "Getting Kubernetes resources"
 
 # Get all Qdrant related resources in the namespace into indivdual files
-crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
+crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
 
 for crd in "${crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
@@ -77,6 +83,21 @@ for crd in "${crds[@]}"; do
     fi
 done
 
+# Get detailed info for nodes running Qdrant pods only
+mkdir -p "$output_dir/resources/node"
+for node in $qdrant_nodes; do
+    kubectl get node "$node" -o yaml 2>> "${output_log}" > "$output_dir/resources/node/$node.yaml" || true
+    echo -n '.'
+    kubectl describe node "$node" 2>> "${output_log}" > "$output_dir/resources/node/$node.txt" || true
+    echo -n '.'
+done
+
+# Check if Metrics API is available
+metrics_available="false"
+if kubectl top nodes &> /dev/null; then
+    metrics_available="true"
+fi
+
 pods=$(kubectl -n "$namespace" get pods -o name 2>> "${output_log}" | cut -d '/' -f 2)
 
 mkdir -p "$output_dir/logs"
@@ -93,19 +114,24 @@ for pod in $pods; do
     echo -n '.'
 
     # Get resource usage of all pods in the namespace
-    kubectl -n "$namespace" top pod "$pod" > "$output_dir/pod-resource-usage/$pod.txt" 2>> "${output_log}" || true
+    if [ "$metrics_available" = "true" ]; then
+        kubectl -n "$namespace" top pod "$pod" > "$output_dir/pod-resource-usage/$pod.txt" 2>> "${output_log}" || true
+    fi
 done
 
 echo ""
 echo "Getting resource usage"
 
-# Get resource usage of all nodes
+# Get resource usage of nodes running Qdrant pods
 mkdir -p "$output_dir/node-resource-usage"
-nodes=$(kubectl get nodes -o name 2>> "${output_log}" | cut -d '/' -f 2)
-for node in $nodes; do
-    kubectl top node "$node" 2>> "${output_log}" > "$output_dir/node-resource-usage/$node.txt" || true
-    echo -n '.'
-done
+if [ "$metrics_available" = "true" ]; then
+    for node in $qdrant_nodes; do
+        kubectl top node "$node" 2>> "${output_log}" > "$output_dir/node-resource-usage/$node.txt" || true
+        echo -n '.'
+    done
+else
+    echo "Metrics API not available, skipping resource usage collection"
+fi
 
 echo ""
 echo "Getting Qdrant telemetry"
