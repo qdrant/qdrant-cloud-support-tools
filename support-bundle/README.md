@@ -52,6 +52,7 @@ chmod +x support-bundle.sh
   * VolumeSnapshots.snapshot.storage.k8s.io
   * VolumeSnapshotClasses.snapshot.storage.k8s.io
   * PersistentVolumeClaims
+  * PodDisruptionBudgets.policy
 * Logs from all pods in the Qdrant namespace
 * Kubernetes version
 * Results of the Kubernetes metrics API for all nodes and pods in the Qdrant namespace, if available
