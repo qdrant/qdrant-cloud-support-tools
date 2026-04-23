@@ -163,6 +163,8 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     echo -n '.'
     curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
     echo -n '.'
+    curl -v "${args[@]}" "$protocol://localhost:6333/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
+    echo -n '.'
     collections=$(curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
     echo -n '.'
     for collection in $collections; do
