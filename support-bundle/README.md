@@ -52,6 +52,7 @@ chmod +x support-bundle.sh
   * VolumeSnapshots.snapshot.storage.k8s.io
   * VolumeSnapshotClasses.snapshot.storage.k8s.io
   * PersistentVolumeClaims
+  * PodDisruptionBudgets.policy
 * Logs from all pods in the Qdrant namespace
 * Kubernetes version
 * Results of the Kubernetes metrics API for all nodes and pods in the Qdrant namespace, if available
@@ -61,6 +62,8 @@ chmod +x support-bundle.sh
   * Collection list endpoint
   * Collection configuration endpoint
   * Collection cluster information endpoint
+  * Collection optimizations endpoint
+  * Slow requests profiler endpoint
 * Network Connectivity between pods in the Qdrant namespace
 
 The support bundle does not contain any user data stored int the Qdrant database, on volumes or snapshots, or sensitive information like API keys or certificates.
