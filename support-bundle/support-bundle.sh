@@ -149,8 +149,8 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
 
     # port-forward
     kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
-    sleep 3
     pid=$!
+    sleep 3
 
     # authenticate if api key is set
     if [ -n "$api_key" ]; then
@@ -189,7 +189,8 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
     set -x
 
-    kill $pid 2>> "${output_log}"
+    kill "$pid" 2>> "${output_log}" || true
+    wait "$pid" 2>/dev/null || true
 done
 
 echo ""
