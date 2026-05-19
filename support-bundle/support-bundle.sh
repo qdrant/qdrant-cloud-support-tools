@@ -150,7 +150,14 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     # port-forward
     kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
     pid=$!
-    sleep 3
+    if ! curl -sf --retry 15 --retry-delay 1 --retry-connrefused \
+            --max-time 2 "${args[@]}" "$protocol://localhost:6333/healthz" 2>/dev/null; then
+        echo ""
+        echo "Port-forward did not become ready for $pod_name, skipping"
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        continue
+    fi
 
     # authenticate if api key is set
     if [ -n "$api_key" ]; then
