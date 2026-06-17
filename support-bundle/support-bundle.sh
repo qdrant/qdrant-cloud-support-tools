@@ -147,32 +147,40 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-k)
     fi
 
-    # port-forward
-    kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
-    sleep 3
+    # port-forward using a free ephemeral port to avoid cross-pod contamination
+    local_port=$(python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()" 2>/dev/null || echo 6333)
+    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" &
     pid=$!
+    if ! curl -sf --retry 15 --retry-delay 1 --retry-connrefused \
+            --max-time 2 "${args[@]}" "$protocol://localhost:${local_port}/healthz" 2>/dev/null; then
+        echo ""
+        echo "Port-forward did not become ready for $pod_name, skipping"
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        continue
+    fi
 
     # authenticate if api key is set
     if [ -n "$api_key" ]; then
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
     echo -n '.'
-    collections=$(curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
+    collections=$(curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
     echo -n '.'
     for collection in $collections; do
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
         echo -n '.'
     done
 
@@ -189,7 +197,8 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
     set -x
 
-    kill $pid 2>> "${output_log}"
+    kill "$pid" 2>> "${output_log}" || true
+    wait "$pid" 2>/dev/null || true
 done
 
 echo ""

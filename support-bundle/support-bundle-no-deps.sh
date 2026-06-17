@@ -12,16 +12,18 @@ if [ "${BASH_VERSINFO[0]}" -lt 3 ]; then
     exit 1
 fi
 
-
-set -e
-
 cd $(dirname $0)
 
+set -e
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
 # Check if the required tools are installed
 if ! command -v kubectl &> /dev/null; then
     echo "kubectl is not installed. Please install kubectl and try again."
+    exit 1
+fi
+if ! command -v jq &> /dev/null; then
+    echo "jq is not installed. Please install jq and try again."
     exit 1
 fi
 
@@ -59,7 +61,7 @@ echo ""
 echo "Getting Kubernetes resources"
 
 # Get all Qdrant related resources in the namespace into indivdual files
-crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io")
+crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io" "poddisruptionbudget.policy")
 
 for crd in "${crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
@@ -145,22 +147,42 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-k)
     fi
 
-    # port-forward
-    kubectl -n "$namespace" port-forward "$pod" 6333:6333  &
-    sleep 3
+    # port-forward using a free ephemeral port to avoid cross-pod contamination
+    local_port=$(python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()" 2>/dev/null || echo 6333)
+    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" &
     pid=$!
+    if ! curl -sf --retry 15 --retry-delay 1 --retry-connrefused \
+            --max-time 2 "${args[@]}" "$protocol://localhost:${local_port}/healthz" 2>/dev/null; then
+        echo ""
+        echo "Port-forward did not become ready for $pod_name, skipping"
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        continue
+    fi
 
     # authenticate if api key is set
     if [ -n "$api_key" ]; then
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
     echo -n '.'
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
+    echo -n '.'
+    collections=$(curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
+    echo -n '.'
+    for collection in $collections; do
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
+        echo -n '.'
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
+        echo -n '.'
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
+        echo -n '.'
+    done
 
     set +x
     if [ -n "$api_key" ]; then
@@ -175,13 +197,14 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
     set -x
 
-    kill $pid 2>> "${output_log}"
+    kill "$pid" 2>> "${output_log}" || true
+    wait "$pid" 2>/dev/null || true
 done
 
 echo ""
 echo "Getting Kubernetes version"
 # Get kubernetes version
-kubectl version  > "$output_dir/kubernetes-version.txt"
+kubectl version > "$output_dir/kubernetes-version.txt"
 
 echo ""
 echo "Creating archive"
