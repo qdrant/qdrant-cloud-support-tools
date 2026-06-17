@@ -39,6 +39,11 @@ if [ -z "$namespace" ]; then
     read -p "Enter the Kubernetes namespace of Qdrant Cloud: " namespace
 fi;
 
+qdrant_only="false"
+if [ "$2" = "--qdrant-only" ]; then
+    qdrant_only="true"
+fi
+
 # Check if the namespace exists
 if ! kubectl get namespace "$namespace" &> /dev/null; then
     echo "Namespace $namespace does not exist. Please enter a valid namespace."
@@ -60,8 +65,12 @@ echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
 echo ""
 echo "Getting nodes running Qdrant pods"
 
-# Get the list of nodes that are running Qdrant pods (only collect info for these nodes)
-qdrant_nodes=$(kubectl -n "$namespace" get pods -o jsonpath='{.items[*].spec.nodeName}' 2>> "${output_log}" | tr ' ' '\n' | grep -v '^$' | sort -u)
+# Get the list of nodes to collect info for
+if [ "$qdrant_only" = "true" ]; then
+    qdrant_nodes=$(kubectl -n "$namespace" get pods -o jsonpath='{.items[*].spec.nodeName}' 2>> "${output_log}" | tr ' ' '\n' | grep -v '^$' | sort -u)
+else
+    qdrant_nodes=$(kubectl get nodes -o name 2>> "${output_log}" | cut -d '/' -f 2)
+fi
 
 echo ""
 echo "Getting Kubernetes resources"
@@ -87,6 +96,7 @@ done
 
 # Get detailed info for nodes running Qdrant pods only
 mkdir -p "$output_dir/resources/node"
+kubectl get node $qdrant_nodes -o wide 2>> "${output_log}" > "$output_dir/resources/list_node.yaml" || true
 for node in $qdrant_nodes; do
     kubectl get node "$node" -o yaml 2>> "${output_log}" > "$output_dir/resources/node/$node.yaml" || true
     echo -n '.'
