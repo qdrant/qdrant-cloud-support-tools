@@ -39,6 +39,9 @@ if [ -z "$namespace" ]; then
     read -p "Enter the Kubernetes namespace of Qdrant Cloud: " namespace
 fi;
 
+# Optional: filter to a specific Qdrant cluster ID
+cluster_id_filter="$2"
+
 # Check if the namespace exists
 if ! kubectl get namespace "$namespace" &> /dev/null; then
     echo "Namespace $namespace does not exist. Please enter a valid namespace."
@@ -55,21 +58,47 @@ BASH_XTRACEFD="5"
 PS4='$LINENO: '
 set -x
 
-echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
+if [ -n "$cluster_id_filter" ]; then
+    echo "Creating Qdrant Cloud support bundle for namespace ${namespace}, Qdrant cluster ${cluster_id_filter}"
+else
+    echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
+fi
 
 echo ""
 echo "Getting Kubernetes resources"
 
-# Get all Qdrant related resources in the namespace into indivdual files
-crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io" "poddisruptionbudget.policy")
+# Infra-level resources - always fetch regardless of cluster filter
+infra_crds=("node" "storageclass.storage.k8s.io" "volumesnapshotclass.snapshot.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io")
 
-for crd in "${crds[@]}"; do
+# Qdrant-cluster-scoped resources - filtered by cluster-id label if a filter is set
+cluster_crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshot.snapshot.storage.k8s.io" "poddisruptionbudget.policy")
+
+label_selector_args=()
+if [ -n "$cluster_id_filter" ]; then
+    label_selector_args=(-l "cluster-id=$cluster_id_filter")
+fi
+
+for crd in "${infra_crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
     kubectl -n "$namespace" get "$crd" -o wide 2>> "${output_log}" > "$output_dir/resources/list_$crd.yaml" || true
     echo -n '.'
-    # if crd exists
     if kubectl get "$crd" &> /dev/null; then
         names=$(kubectl -n "$namespace" get "$crd" -o name)
+        for name in $names; do
+            kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
+            echo -n '.'
+            kubectl -n "$namespace" describe "$name" 2>> "${output_log}" > "$output_dir/resources/$name.txt" || true
+            echo -n '.'
+        done
+    fi
+done
+
+for crd in "${cluster_crds[@]}"; do
+    mkdir -p "$output_dir/resources/$crd"
+    kubectl -n "$namespace" get "$crd" "${label_selector_args[@]}" -o wide 2>> "${output_log}" > "$output_dir/resources/list_$crd.yaml" || true
+    echo -n '.'
+    if kubectl get "$crd" &> /dev/null; then
+        names=$(kubectl -n "$namespace" get "$crd" "${label_selector_args[@]}" -o name)
         for name in $names; do
             kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
             echo -n '.'
@@ -126,6 +155,11 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
 
     cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
+
+    if [ -n "$cluster_id_filter" ] && [ "$cluster_id" != "$cluster_id_filter" ]; then
+        continue
+    fi
+
     cluster_name="qdrant-$cluster_id"
 
     # get secret reference from pod environment variable
