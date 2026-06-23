@@ -30,6 +30,13 @@ chmod +x support-bundle.sh
 ./support-bundle.sh the-qdrant-namespace
 ```
 
+To collect data for a **specific Qdrant cluster only**, pass `--cluster-id`:
+```bash
+./support-bundle.sh the-qdrant-namespace --cluster-id=your-cluster-id
+```
+
+This is useful when only one of multiple Qdrant clusters in the namespace is affected. Infra-level resources (nodes, storage classes, etc.) are always collected regardless of the filter.
+
 ## Collected data
 
 * YAML definitions of `kubectl describe` output including events and status of the following resources in the Qdrant namespace:
