@@ -71,10 +71,10 @@ echo "Getting Kubernetes resources"
 
 # Infra-level resources - always fetch regardless of cluster filter
 # Includes resources without cluster-id label (deployment.apps, service) so they are never empty when filtering
-infra_crds=("storageclass.storage.k8s.io" "volumesnapshotclass.snapshot.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "deployment.apps" "service" "node")
+infra_crds=("storageclass.storage.k8s.io" "volumesnapshotclass.snapshot.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "deployment.apps" "service" "node" "pod" "configmap")
 
 # Qdrant-cluster-scoped resources - filtered by cluster-id label if a filter is set
-cluster_crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "statefulset.apps" "configmap" "ingress.networking.k8s.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshot.snapshot.storage.k8s.io")
+cluster_crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "statefulset.apps" "ingress.networking.k8s.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshot.snapshot.storage.k8s.io")
 
 label_selector_args=()
 if [ -n "$cluster_id_filter" ]; then
