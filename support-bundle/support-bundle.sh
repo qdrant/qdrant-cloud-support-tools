@@ -39,6 +39,13 @@ if [ -z "$namespace" ]; then
     read -p "Enter the Kubernetes namespace of Qdrant Cloud: " namespace
 fi;
 
+cluster_id_filter=""
+for arg in "${@:2}"; do
+    if [[ "$arg" == --cluster-id=* ]]; then
+        cluster_id_filter="${arg#--cluster-id=}"
+    fi
+done
+
 # Check if the namespace exists
 if ! kubectl get namespace "$namespace" &> /dev/null; then
     echo "Namespace $namespace does not exist. Please enter a valid namespace."
@@ -55,21 +62,48 @@ BASH_XTRACEFD="5"
 PS4='$LINENO: '
 set -x
 
-echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
+if [ -n "$cluster_id_filter" ]; then
+    echo "Creating Qdrant Cloud support bundle for namespace ${namespace}, Qdrant cluster ${cluster_id_filter}"
+else
+    echo "Creating Qdrant Cloud support bundle for namespace ${namespace}"
+fi
 
 echo ""
 echo "Getting Kubernetes resources"
 
-# Get all Qdrant related resources in the namespace into indivdual files
-crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "pod" "deployment.apps" "statefulset.apps" "service" "configmap" "ingress.networking.k8s.io" "node" "storageclass.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshotclass.snapshot.storage.k8s.io" "volumesnapshot.snapshot.storage.k8s.io" "poddisruptionbudget.policy")
+# Infra-level resources - always fetch regardless of cluster filter
+# Includes resources without cluster-id label (deployment.apps, service) so they are never empty when filtering
+infra_crds=("storageclass.storage.k8s.io" "volumesnapshotclass.snapshot.storage.k8s.io" "helmrelease.cd.qdrant.io" "helmrepository.cd.qdrant.io" "helmchart.cd.qdrant.io" "deployment.apps" "service" "node" "pod" "configmap")
 
-for crd in "${crds[@]}"; do
+# Qdrant-cluster-scoped resources - filtered by cluster-id label if a filter is set
+cluster_crds=("qdrantcluster.qdrant.io" "qdrantclustersnapshot.qdrant.io" "qdrantclusterscheduledsnapshot.qdrant.io" "qdrantclusterrestore.qdrant.io" "statefulset.apps" "ingress.networking.k8s.io" "networkpolicy.networking.k8s.io" "persistentvolumeclaim" "volumesnapshot.snapshot.storage.k8s.io" "poddisruptionbudget.policy")
+
+label_selector_args=()
+if [ -n "$cluster_id_filter" ]; then
+    label_selector_args=(-l "cluster-id=$cluster_id_filter")
+fi
+
+for crd in "${infra_crds[@]}"; do
     mkdir -p "$output_dir/resources/$crd"
     kubectl -n "$namespace" get "$crd" -o wide 2>> "${output_log}" > "$output_dir/resources/list_$crd.yaml" || true
     echo -n '.'
-    # if crd exists
     if kubectl get "$crd" &> /dev/null; then
         names=$(kubectl -n "$namespace" get "$crd" -o name)
+        for name in $names; do
+            kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
+            echo -n '.'
+            kubectl -n "$namespace" describe "$name" 2>> "${output_log}" > "$output_dir/resources/$name.txt" || true
+            echo -n '.'
+        done
+    fi
+done
+
+for crd in "${cluster_crds[@]}"; do
+    mkdir -p "$output_dir/resources/$crd"
+    kubectl -n "$namespace" get "$crd" "${label_selector_args[@]}" -o wide 2>> "${output_log}" > "$output_dir/resources/list_$crd.yaml" || true
+    echo -n '.'
+    if kubectl get "$crd" &> /dev/null; then
+        names=$(kubectl -n "$namespace" get "$crd" "${label_selector_args[@]}" -o name)
         for name in $names; do
             kubectl -n "$namespace" get "$name" -o yaml 2>> "${output_log}" > "$output_dir/resources/$name.yaml" || true
             echo -n '.'
@@ -126,6 +160,11 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
 
     cluster_id=$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.metadata.labels.cluster-id}' 2>> "${output_log}")
+
+    if [ -n "$cluster_id_filter" ] && [ "$cluster_id" != "$cluster_id_filter" ]; then
+        continue
+    fi
+
     cluster_name="qdrant-$cluster_id"
 
     # get secret reference from pod environment variable
@@ -147,32 +186,40 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-k)
     fi
 
-    # port-forward
-    kubectl -n "$namespace" port-forward "$pod" 6333:6333 &
-    sleep 3
+    # port-forward using a free ephemeral port to avoid cross-pod contamination
+    local_port=$(python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()" 2>/dev/null || echo 6333)
+    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" &
     pid=$!
+    if ! curl -sf --retry 15 --retry-delay 1 --retry-connrefused \
+            --max-time 2 "${args[@]}" "$protocol://localhost:${local_port}/healthz" 2>/dev/null; then
+        echo ""
+        echo "Port-forward did not become ready for $pod_name, skipping"
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        continue
+    fi
 
     # authenticate if api key is set
     if [ -n "$api_key" ]; then
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl -v "${args[@]}" "$protocol://localhost:6333/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:6333/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
+    curl -v "${args[@]}" "$protocol://localhost:${local_port}/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
     echo -n '.'
-    collections=$(curl -v "${args[@]}" "$protocol://localhost:6333/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
+    collections=$(curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
     echo -n '.'
     for collection in $collections; do
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:6333/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
         echo -n '.'
     done
 
@@ -189,7 +236,8 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     fi
     set -x
 
-    kill $pid 2>> "${output_log}"
+    kill "$pid" 2>> "${output_log}" || true
+    wait "$pid" 2>/dev/null || true
 done
 
 echo ""
