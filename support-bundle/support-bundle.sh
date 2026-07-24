@@ -113,6 +113,14 @@ for crd in "${cluster_crds[@]}"; do
     fi
 done
 
+mkdir -p "$output_dir/resources/customresourcedefinitions"
+for crd_name in $(kubectl get customresourcedefinitions -o name 2>> "${output_log}" | grep -E '(cd\.qdrant\.io|qdrant\.io)$'); do
+    kubectl get "$crd_name" -o yaml 2>> "${output_log}" > "$output_dir/resources/customresourcedefinitions/$(basename "$crd_name").yaml" || true
+    echo -n '.'
+done
+
+kubectl -n "$namespace" get secrets -l owner=helm --sort-by=.metadata.creationTimestamp 2>> "${output_log}" > "$output_dir/resources/helm_release_revisions.txt" || true
+
 pods=$(kubectl -n "$namespace" get pods -o name 2>> "${output_log}" | cut -d '/' -f 2)
 
 mkdir -p "$output_dir/logs"
