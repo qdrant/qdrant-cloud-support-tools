@@ -229,6 +229,8 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         echo -n '.'
         curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
         echo -n '.'
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/memory" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-memory.json"
+        echo -n '.'
     done
 
     set +x
