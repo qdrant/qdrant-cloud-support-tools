@@ -212,6 +212,7 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
+    set +e
     curl -v "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     echo -n '.'
     curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
@@ -229,7 +230,10 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         echo -n '.'
         curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
         echo -n '.'
+        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/memory" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-memory.json"
+        echo -n '.'
     done
+    set -e
 
     set +x
     if [ -n "$api_key" ]; then
