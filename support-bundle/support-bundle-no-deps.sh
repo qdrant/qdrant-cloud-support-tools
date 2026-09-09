@@ -186,7 +186,10 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
 
     # port-forward using a free ephemeral port to avoid cross-pod contamination
     local_port=$(python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()" 2>/dev/null || echo 6333)
-    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" &
+    # capture kubectl's own stdout/stderr (e.g. RBAC/version-skew errors, dropped
+    # tunnel messages) instead of discarding them, so failures are diagnosable later
+    echo "--- port-forward $pod_name -> localhost:${local_port} ---" >> "${output_log}"
+    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" >> "${output_log}" 2>&1 &
     pid=$!
     if ! curl -sf --retry 15 --retry-delay 1 --retry-connrefused \
             --max-time 2 "${args[@]}" "$protocol://localhost:${local_port}/healthz" 2>/dev/null; then
@@ -202,12 +205,31 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    # the healthz check above proves the tunnel worked for one connection, but
+    # kubectl port-forward has been observed to refuse the *next* new local
+    # connection right after (especially across kubectl/API-server version
+    # skew) even though the pod itself is healthy. Retry each pull on
+    # connection-refused so a dropped tunnel self-heals instead of silently
+    # producing an empty file.
+    curl_retry_opts=(--retry 5 --retry-delay 1 --retry-connrefused --max-time 30)
+
+    telemetry_file="$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    collections_file="$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    cluster_file="$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" > "$telemetry_file"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" > "$collections_file"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" > "$cluster_file"
     echo -n '.'
+
+    for f in "$telemetry_file" "$collections_file" "$cluster_file"; do
+        if [ ! -s "$f" ]; then
+            echo ""
+            echo "WARNING: $(basename "$f") is empty - the port-forward tunnel to $pod_name likely dropped mid-collection. See ${output_log} for details."
+        fi
+    done
 
     set +x
     if [ -n "$api_key" ]; then
