@@ -196,10 +196,7 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
 
     # port-forward using a free ephemeral port to avoid cross-pod contamination
     local_port=$(python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()" 2>/dev/null || echo 6333)
-    # capture kubectl's own stdout/stderr (e.g. RBAC/version-skew errors, dropped
-    # tunnel messages) instead of discarding them, so failures are diagnosable later
-    echo "--- port-forward $pod_name -> localhost:${local_port} ---" >> "${output_log}"
-    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" >> "${output_log}" 2>&1 &
+    kubectl -n "$namespace" port-forward "$pod" "${local_port}:6333" &
     pid=$!
     if ! curl -sf --retry 15 --retry-delay 1 --retry-connrefused \
             --max-time 2 "${args[@]}" "$protocol://localhost:${local_port}/healthz" 2>/dev/null; then
