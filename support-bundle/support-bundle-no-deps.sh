@@ -213,23 +213,34 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
     # producing an empty file.
     curl_retry_opts=(--retry 5 --retry-delay 1 --retry-connrefused --max-time 30)
 
+    empty_file_check() {
+        if [ ! -s "$1" ]; then
+            echo ""
+            echo "WARNING: $(basename "$1") is empty - the port-forward tunnel to $pod_name likely dropped mid-collection. See ${output_log} for details."
+        fi
+    }
+
     telemetry_file="$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
     collections_file="$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
     cluster_file="$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    pod_files=("$telemetry_file" "$collections_file" "$cluster_file")
 
-    curl -v "${curl_retry_opts[@]}" "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" > "$telemetry_file"
+    # use curl's own -o, not shell >, so curl owns the file across retries.
+    # wrapped in set +e/-e so a pod whose retries are all exhausted doesn't
+    # abort the whole script (set -e is active above) and skip every
+    # remaining pod.
+    set +e
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$telemetry_file" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}"
     echo -n '.'
-    curl -v "${curl_retry_opts[@]}" "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" > "$collections_file"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$collections_file" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}"
     echo -n '.'
-    curl -v "${curl_retry_opts[@]}" "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" > "$cluster_file"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$cluster_file" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}"
     echo -n '.'
 
-    for f in "$telemetry_file" "$collections_file" "$cluster_file"; do
-        if [ ! -s "$f" ]; then
-            echo ""
-            echo "WARNING: $(basename "$f") is empty - the port-forward tunnel to $pod_name likely dropped mid-collection. See ${output_log} for details."
-        fi
+    for f in "${pod_files[@]}"; do
+        empty_file_check "$f"
     done
+    set -e
 
     set +x
     if [ -n "$api_key" ]; then
