@@ -212,26 +212,59 @@ for pod in $(kubectl -n "$namespace" get pods -l app=qdrant -o name 2>> "${outpu
         args+=(-H "Authorization: Bearer $api_key")
     fi
 
+    # the healthz check above proves the tunnel worked for one connection, but
+    # kubectl port-forward has been observed to refuse the *next* new local
+    # connection right after (especially across kubectl/API-server version
+    # skew) even though the pod itself is healthy. Retry each pull on
+    # connection-refused so a dropped tunnel self-heals instead of silently
+    # producing an empty file.
+    curl_retry_opts=(--retry 5 --retry-delay 1 --retry-connrefused --max-time 30)
+
+    empty_file_check() {
+        if [ ! -s "$1" ]; then
+            echo ""
+            echo "WARNING: $(basename "$1") is empty - the port-forward tunnel to $pod_name likely dropped mid-collection. See ${output_log} for details."
+        fi
+    }
+
+    # use curl's own -o, not shell > / a pipe to jq, so curl owns the file
+    # across retries.
+    telemetry_file="$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    collections_file="$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    cluster_file="$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    slow_requests_file="$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
+    pod_files=("$telemetry_file" "$collections_file" "$cluster_file" "$slow_requests_file")
+
     set +e
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-telemetry.json"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$telemetry_file" "$protocol://localhost:${local_port}/telemetry?details_level=10" 2>> "${output_log}"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collections.json"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$collections_file" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-cluster.json"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$cluster_file" "$protocol://localhost:${local_port}/cluster" 2>> "${output_log}"
     echo -n '.'
-    curl -v "${args[@]}" "$protocol://localhost:${local_port}/profiler/slow_requests" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-slow-requests.json"
+    curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$slow_requests_file" "$protocol://localhost:${local_port}/profiler/slow_requests" 2>> "${output_log}"
     echo -n '.'
-    collections=$(curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections" 2>> "${output_log}" | jq -r '.result.collections[] | .name')
-    echo -n '.'
+
+    collections=$(jq -r '.result.collections[] | .name' "$collections_file" 2>> "${output_log}")
     for collection in $collections; do
-        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
+        collection_file="$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection.json"
+        collection_cluster_file="$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
+        collection_optimizations_file="$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
+        collection_memory_file="$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-memory.json"
+        pod_files+=("$collection_file" "$collection_cluster_file" "$collection_optimizations_file" "$collection_memory_file")
+
+        curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$collection_file" "$protocol://localhost:${local_port}/collections/$collection" 2>> "${output_log}"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/cluster" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-cluster.json"
+        curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$collection_cluster_file" "$protocol://localhost:${local_port}/collections/$collection/cluster" 2>> "${output_log}"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-optimizations.json"
+        curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$collection_optimizations_file" "$protocol://localhost:${local_port}/collections/$collection/optimizations" 2>> "${output_log}"
         echo -n '.'
-        curl -v "${args[@]}" "$protocol://localhost:${local_port}/collections/$collection/memory" 2>> "${output_log}" | jq '.' > "$output_dir/qdrant-telemetry/$(basename $pod)-collection-$collection-memory.json"
+        curl -v "${curl_retry_opts[@]}" "${args[@]}" -o "$collection_memory_file" "$protocol://localhost:${local_port}/collections/$collection/memory" 2>> "${output_log}"
         echo -n '.'
+    done
+
+    for f in "${pod_files[@]}"; do
+        empty_file_check "$f"
     done
     set -e
 
